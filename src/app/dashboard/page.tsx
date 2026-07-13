@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import {
   ArrowDownLeft,
@@ -9,7 +8,6 @@ import {
   UserPlus,
 } from "lucide-react";
 import {
-  classifyTransactionAction,
   createCustomerUserAction,
   createDharmaAction,
   updateDharmaAction,
@@ -17,11 +15,11 @@ import {
 import { DeleteDharmaForm } from "@/components/delete-dharma-form";
 import { OrganizationManagementModals } from "@/components/organization-management-modals";
 import { PageHeader } from "@/components/page-header";
-import { PendingLink } from "@/components/pending-link";
 import { PublicLink } from "@/components/public-link";
 import { SubmitButton } from "@/components/submit-button";
+import { TransactionsPanel } from "@/components/transactions-panel";
 import { requireSession } from "@/lib/auth";
-import { dateTime, money } from "@/lib/format";
+import { money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 type Filters = {
@@ -32,8 +30,6 @@ type Filters = {
   page?: string;
 };
 
-const TRANSACTIONS_PER_PAGE = 25;
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -43,21 +39,6 @@ export default async function DashboardPage({
   if (session.systemRole === "SUPER_ADMIN") redirect("/dashboard/admin");
   const filters = await searchParams;
   const organizationId = session.organizationId;
-  const activeTab =
-    filters.tab || (filters.status === "UNMATCHED" ? "unmatched" : "all");
-  const currentPage = Math.max(1, Number.parseInt(filters.page || "1", 10) || 1);
-  const transactionWhere: Prisma.TransactionWhereInput = {
-    organizationId,
-    ...(filters.type === "CREDIT" || filters.type === "DEBIT"
-      ? { type: filters.type }
-      : {}),
-    ...(activeTab === "unmatched"
-      ? { dharmaId: null }
-      : activeTab !== "all"
-        ? { dharmaId: activeTab }
-      : {}),
-    ...(filters.account ? { bankAccountId: filters.account } : {}),
-  };
 
   const [
     organization,
@@ -65,8 +46,6 @@ export default async function DashboardPage({
     dharmas,
     members,
     transactionStats,
-    transactions,
-    filteredTotal,
   ] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
     prisma.bankAccount.findMany({
@@ -93,41 +72,6 @@ export default async function DashboardPage({
       _sum: { amount: true },
       _count: true,
     }),
-    prisma.transaction.findMany({
-      where: transactionWhere,
-      select: {
-        id: true,
-        bankAccountId: true,
-        dharmaId: true,
-        type: true,
-        amount: true,
-        transactionTime: true,
-        narrative: true,
-        displayName: true,
-        refId: true,
-        manuallyClassified: true,
-        classifiedByEmail: true,
-        classifiedAt: true,
-        bankAccount: { select: { accountNo: true } },
-        dharma: { select: { id: true, name: true } },
-        classificationLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 3,
-          select: {
-            id: true,
-            source: true,
-            actorEmail: true,
-            previousDharmaName: true,
-            newDharmaName: true,
-            createdAt: true,
-          },
-        },
-      },
-      orderBy: { transactionTime: "desc" },
-      skip: (currentPage - 1) * TRANSACTIONS_PER_PAGE,
-      take: TRANSACTIONS_PER_PAGE,
-    }),
-    prisma.transaction.count({ where: transactionWhere }),
   ]);
   const transactionCount = transactionStats.reduce(
     (sum, row) => sum + row._count,
@@ -148,19 +92,6 @@ export default async function DashboardPage({
       { amount: Number(row._sum.amount || 0), count: row._count },
     ]),
   );
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredTotal / TRANSACTIONS_PER_PAGE),
-  );
-  const transactionUrl = (tab: string, page = 1) => {
-    const params = new URLSearchParams();
-    params.set("tab", tab);
-    if (filters.type === "CREDIT" || filters.type === "DEBIT")
-      params.set("type", filters.type);
-    if (filters.account) params.set("account", filters.account);
-    if (page > 1) params.set("page", String(page));
-    return `/dashboard?${params.toString()}#giao-dich`;
-  };
   const cards = [
     [
       "Tổng thu",
@@ -538,226 +469,33 @@ export default async function DashboardPage({
         </div>
       </details>
 
-      <section id="giao-dich" className="card scroll-mt-24">
-        <div className="px-4 py-3 border-b border-[#e3e9e5]">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-            <div>
-              <h2 className="font-semibold text-lg">Các giao dịch</h2>
-              <p className="text-sm text-[#7a867e] mt-1">
-                {filteredTotal.toLocaleString("vi-VN")} kết quả · trang {currentPage}
-                /{totalPages}.
-              </p>
-            </div>
-            <form
-              className="flex flex-wrap gap-2"
-              action="/dashboard#giao-dich"
-            >
-              <input type="hidden" name="tab" value={activeTab} />
-              <select
-                className="input w-auto"
-                name="type"
-                defaultValue={filters.type || "ALL"}
-              >
-                <option value="ALL">Tất cả thu/chi</option>
-                <option value="CREDIT">Khoản thu</option>
-                <option value="DEBIT">Khoản chi</option>
-              </select>
-              <select
-                className="input w-auto"
-                name="account"
-                defaultValue={filters.account || ""}
-              >
-                <option value="">Mọi tài khoản</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.accountNo}
-                  </option>
-                ))}
-              </select>
-              <button className="btn btn-primary">Lọc</button>
-            </form>
-          </div>
-          <nav
-            className="flex gap-2 overflow-x-auto mt-5 pb-1"
-            aria-label="Phân loại giao dịch"
-          >
-            <PendingLink
-              href={transactionUrl("all")}
-              className={`btn py-2 whitespace-nowrap ${activeTab === "all" ? "btn-primary" : "btn-soft"}`}
-            >
-              Tất cả
-              <span className="text-xs opacity-75">
-                {transactionCount.toLocaleString("vi-VN")}
-              </span>
-            </PendingLink>
-            <PendingLink
-              href={transactionUrl("unmatched")}
-              className={`btn py-2 whitespace-nowrap border border-[#efc56f] ${activeTab === "unmatched" ? "bg-[#d99a24] text-white" : "bg-[#fff1d7] text-[#8a590d]"}`}
-            >
-              <TriangleAlert size={15} /> Chưa phân loại
-              <span className="text-xs opacity-80">
-                {unmatched.toLocaleString("vi-VN")}
-              </span>
-            </PendingLink>
-            {dharmas.map((dharma) => (
-              <PendingLink
-                key={dharma.id}
-                href={transactionUrl(dharma.id)}
-                className={`btn py-2 whitespace-nowrap ${activeTab === dharma.id ? "btn-primary" : "btn-soft"}`}
-              >
-                {dharma.name}
-                <span className="text-xs opacity-75">
-                  {dharma._count.transactions.toLocaleString("vi-VN")}
-                </span>
-              </PendingLink>
-            ))}
-          </nav>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Thời gian / Loại</th>
-                <th>Nội dung</th>
-                <th>Thiện pháp / Phân loại thủ công</th>
-                <th className="text-right">Số tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((transaction) => {
-                const options = dharmas.filter(
-                  (dharma) =>
-                    dharma.bankAccountId === transaction.bankAccountId,
-                );
-                return (
-                  <tr key={transaction.id}>
-                    <td className="whitespace-nowrap">
-                      <p>{dateTime.format(transaction.transactionTime)}</p>
-                      <span
-                        className={`badge mt-2 ${transaction.type === "CREDIT" ? "badge-green" : "bg-red-50 text-red-700"}`}
-                      >
-                        {transaction.type === "CREDIT" ? "THU" : "CHI"}
-                      </span>
-                      <span className="text-xs text-[#7a867e] ml-2">
-                        TK {transaction.bankAccount.accountNo}
-                      </span>
-                    </td>
-                    <td className="max-w-xl">
-                      <p className="line-clamp-2">{transaction.narrative}</p>
-                      <p className="text-xs text-[#8a948e] mt-1">
-                        {transaction.displayName || transaction.refId}
-                      </p>
-                    </td>
-                    <td>
-                      <form
-                        action={classifyTransactionAction}
-                        className="flex gap-2 min-w-72"
-                      >
-                        <input
-                          type="hidden"
-                          name="transactionId"
-                          value={transaction.id}
-                        />
-                        <select
-                          className="input py-2"
-                          name="dharmaId"
-                          defaultValue={transaction.dharmaId || ""}
-                        >
-                          <option value="">Chưa phân loại</option>
-                          {options.map((dharma) => (
-                            <option key={dharma.id} value={dharma.id}>
-                              {dharma.name}
-                            </option>
-                          ))}
-                        </select>
-                        <SubmitButton pendingText="Đang gán..." className="btn btn-soft py-2">Gán</SubmitButton>
-                      </form>
-                      <div className="mt-2">
-                        {transaction.manuallyClassified ? (
-                          <span className="badge badge-green">
-                            Thủ công · {transaction.classifiedByEmail || "Tài khoản cũ"}
-                          </span>
-                        ) : transaction.dharmaId ? (
-                          <span className="badge badge-gray">Hệ thống tự động gán</span>
-                        ) : (
-                          <span className="badge badge-amber">Hệ thống chưa nhận diện</span>
-                        )}
-                        {transaction.classifiedAt && (
-                          <span className="block text-[11px] text-[#7a867e] mt-1">
-                            {dateTime.format(transaction.classifiedAt)}
-                          </span>
-                        )}
-                      </div>
-                      {transaction.classificationLogs.length > 0 && (
-                        <details className="mt-2 text-xs">
-                          <summary className="cursor-pointer text-[#176b46] font-medium">
-                            Lịch sử phân loại ({transaction.classificationLogs.length} gần nhất)
-                          </summary>
-                          <div className="mt-2 space-y-2 border-l-2 border-[#dfe6e1] pl-3">
-                            {transaction.classificationLogs.map((log) => (
-                              <div key={log.id}>
-                                <p className="font-medium">
-                                  {log.source === "MANUAL"
-                                    ? `Thủ công · ${log.actorEmail || "Không rõ tài khoản"}`
-                                    : "Hệ thống tự động"}
-                                </p>
-                                <p className="text-[#68756d]">
-                                  {log.previousDharmaName || "Chưa phân loại"} → {log.newDharmaName || "Chưa phân loại"}
-                                </p>
-                                <p className="text-[#8a948e]">{dateTime.format(log.createdAt)}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-                    </td>
-                    <td
-                      className={`text-right font-semibold whitespace-nowrap ${transaction.type === "CREDIT" ? "text-[#176b46]" : "text-red-700"}`}
-                    >
-                      {transaction.type === "CREDIT" ? "+" : "−"}
-                      {money.format(Number(transaction.amount))}
-                    </td>
-                  </tr>
-                );
-              })}
-              {!transactions.length && (
-                <tr>
-                  <td colSpan={4} className="text-center py-12 text-[#7a867e]">
-                    Không có giao dịch phù hợp.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-[#e3e9e5] flex items-center justify-between gap-3">
-            {currentPage > 1 ? (
-              <PendingLink
-                className="btn btn-soft py-2"
-                href={transactionUrl(activeTab, currentPage - 1)}
-              >
-                ← Trang trước
-              </PendingLink>
-            ) : (
-              <span />
-            )}
-            <span className="text-sm text-[#68756d]">
-              Trang {currentPage} / {totalPages}
-            </span>
-            {currentPage < totalPages ? (
-              <PendingLink
-                className="btn btn-soft py-2"
-                href={transactionUrl(activeTab, currentPage + 1)}
-              >
-                Trang sau →
-              </PendingLink>
-            ) : (
-              <span />
-            )}
-          </div>
-        )}
-      </section>
+      <TransactionsPanel
+        accounts={accounts.map((account) => ({
+          id: account.id,
+          accountNo: account.accountNo,
+        }))}
+        dharmas={dharmas.map((dharma) => ({
+          id: dharma.id,
+          name: dharma.name,
+          bankAccountId: dharma.bankAccountId,
+          transactionCount: dharma._count.transactions,
+        }))}
+        initialFilters={{
+          tab:
+            filters.tab ||
+            (filters.status === "UNMATCHED" ? "unmatched" : "all"),
+          type:
+            filters.type === "CREDIT" || filters.type === "DEBIT"
+              ? filters.type
+              : "ALL",
+          account: filters.account || "",
+          page: Math.max(
+            1,
+            Number.parseInt(filters.page || "1", 10) || 1,
+          ),
+        }}
+        initialCounts={{ all: transactionCount, unmatched }}
+      />
       <p className="text-center text-xs text-[#8a948e] mt-6">
         {transactionCount.toLocaleString("vi-VN")} giao dịch đã lưu trong hệ
         thống
