@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ArrowDownLeft,
@@ -63,13 +64,9 @@ export default async function DashboardPage({
     accounts,
     dharmas,
     members,
-    transactionCount,
-    income,
-    expense,
-    unmatched,
+    transactionStats,
     transactions,
     filteredTotal,
-    incomeByDharma,
   ] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
     prisma.bankAccount.findMany({
@@ -90,48 +87,67 @@ export default async function DashboardPage({
       include: { user: true },
       orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
     }),
-    prisma.transaction.count({ where: { organizationId } }),
-    prisma.transaction.aggregate({
-      where: { organizationId, type: "CREDIT" },
+    prisma.transaction.groupBy({
+      by: ["type", "dharmaId"],
+      where: { organizationId },
       _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { organizationId, type: "DEBIT" },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.count({
-      where: {
-        organizationId,
-        dharmaId: null,
-      },
+      _count: true,
     }),
     prisma.transaction.findMany({
       where: transactionWhere,
-      include: {
-        bankAccount: true,
-        dharma: true,
-        classificationLogs: { orderBy: { createdAt: "desc" }, take: 3 },
+      select: {
+        id: true,
+        bankAccountId: true,
+        dharmaId: true,
+        type: true,
+        amount: true,
+        transactionTime: true,
+        narrative: true,
+        displayName: true,
+        refId: true,
+        manuallyClassified: true,
+        classifiedByEmail: true,
+        classifiedAt: true,
+        bankAccount: { select: { accountNo: true } },
+        dharma: { select: { id: true, name: true } },
+        classificationLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 3,
+          select: {
+            id: true,
+            source: true,
+            actorEmail: true,
+            previousDharmaName: true,
+            newDharmaName: true,
+            createdAt: true,
+          },
+        },
       },
       orderBy: { transactionTime: "desc" },
       skip: (currentPage - 1) * TRANSACTIONS_PER_PAGE,
       take: TRANSACTIONS_PER_PAGE,
     }),
     prisma.transaction.count({ where: transactionWhere }),
-    prisma.transaction.groupBy({
-      by: ["dharmaId"],
-      where: { organizationId, type: "CREDIT", dharmaId: { not: null } },
-      _sum: { amount: true },
-      _count: true,
-    }),
   ]);
+  const transactionCount = transactionStats.reduce(
+    (sum, row) => sum + row._count,
+    0,
+  );
+  const incomeTotal = transactionStats
+    .filter((row) => row.type === "CREDIT")
+    .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0);
+  const expenseTotal = transactionStats
+    .filter((row) => row.type === "DEBIT")
+    .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0);
+  const unmatched = transactionStats
+    .filter((row) => row.dharmaId === null)
+    .reduce((sum, row) => sum + row._count, 0);
   const incomeMap = new Map(
-    incomeByDharma.map((row) => [
+    transactionStats.filter((row) => row.type === "CREDIT" && row.dharmaId).map((row) => [
       row.dharmaId,
       { amount: Number(row._sum.amount || 0), count: row._count },
     ]),
   );
-  const incomeTotal = Number(income._sum.amount || 0);
-  const expenseTotal = Number(expense._sum.amount || 0);
   const totalPages = Math.max(
     1,
     Math.ceil(filteredTotal / TRANSACTIONS_PER_PAGE),
@@ -565,7 +581,7 @@ export default async function DashboardPage({
             className="flex gap-2 overflow-x-auto mt-5 pb-1"
             aria-label="Phân loại giao dịch"
           >
-            <a
+            <Link
               href={transactionUrl("all")}
               className={`btn py-2 whitespace-nowrap ${activeTab === "all" ? "btn-primary" : "btn-soft"}`}
             >
@@ -573,8 +589,8 @@ export default async function DashboardPage({
               <span className="text-xs opacity-75">
                 {transactionCount.toLocaleString("vi-VN")}
               </span>
-            </a>
-            <a
+            </Link>
+            <Link
               href={transactionUrl("unmatched")}
               className={`btn py-2 whitespace-nowrap border border-[#efc56f] ${activeTab === "unmatched" ? "bg-[#d99a24] text-white" : "bg-[#fff1d7] text-[#8a590d]"}`}
             >
@@ -582,9 +598,9 @@ export default async function DashboardPage({
               <span className="text-xs opacity-80">
                 {unmatched.toLocaleString("vi-VN")}
               </span>
-            </a>
+            </Link>
             {dharmas.map((dharma) => (
-              <a
+              <Link
                 key={dharma.id}
                 href={transactionUrl(dharma.id)}
                 className={`btn py-2 whitespace-nowrap ${activeTab === dharma.id ? "btn-primary" : "btn-soft"}`}
@@ -593,7 +609,7 @@ export default async function DashboardPage({
                 <span className="text-xs opacity-75">
                   {dharma._count.transactions.toLocaleString("vi-VN")}
                 </span>
-              </a>
+              </Link>
             ))}
           </nav>
         </div>
@@ -717,12 +733,12 @@ export default async function DashboardPage({
         {totalPages > 1 && (
           <div className="p-4 border-t border-[#e3e9e5] flex items-center justify-between gap-3">
             {currentPage > 1 ? (
-              <a
+              <Link
                 className="btn btn-soft py-2"
                 href={transactionUrl(activeTab, currentPage - 1)}
               >
                 ← Trang trước
-              </a>
+              </Link>
             ) : (
               <span />
             )}
@@ -730,12 +746,12 @@ export default async function DashboardPage({
               Trang {currentPage} / {totalPages}
             </span>
             {currentPage < totalPages ? (
-              <a
+              <Link
                 className="btn btn-soft py-2"
                 href={transactionUrl(activeTab, currentPage + 1)}
               >
                 Trang sau →
-              </a>
+              </Link>
             ) : (
               <span />
             )}

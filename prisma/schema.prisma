@@ -151,6 +151,7 @@ model Transaction {
   @@unique([bankAccountId, externalId])
   @@unique([bankAccountId, refId])
   @@index([organizationId, transactionTime])
+  @@index([organizationId, dharmaId, transactionTime])
   @@index([dharmaId, transactionTime])
   @@index([organizationId, type, transactionTime])
   @@index([dharmaId, type, transactionTime])
