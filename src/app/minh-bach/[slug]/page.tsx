@@ -157,8 +157,46 @@ export default async function PublicOrganizationPage({
         <div className="p-5 border-b border-[#e3e9e5]">
           <h2 className="text-xl font-semibold">Các thiện pháp</h2>
         </div>
-        <div className="table-wrap">
-          <table>
+        <div className="divide-y divide-[#edf1ee] sm:hidden">
+          {transactions.map((item) => (
+            <article key={item.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium break-words">
+                    {item.displayName || "Không xác định"}
+                  </p>
+                  <p className="text-xs text-[#7a867e] mt-1">
+                    {dateTime.format(item.transactionTime)} · TK{" "}
+                    {item.bankAccount.accountNo}
+                  </p>
+                </div>
+                <p
+                  className={`shrink-0 font-semibold ${item.type === "CREDIT" ? "text-[#176b46]" : "text-red-700"}`}
+                >
+                  {item.type === "CREDIT" ? "+" : "−"}
+                  {money.format(Number(item.amount))}
+                </p>
+              </div>
+              <p className="text-sm break-words mt-3">{item.narrative}</p>
+              <p className="text-xs text-[#176b46] mt-2">
+                {item.dharma?.name || "Chưa phân loại"}
+              </p>
+            </article>
+          ))}
+          {!transactions.length && (
+            <p className="text-center py-12 text-sm text-[#7a867e]">
+              Chưa có giao dịch.
+            </p>
+          )}
+        </div>
+        <div className="hidden sm:block">
+          <table className="table-fixed">
+            <colgroup>
+              <col className="w-[21%]" />
+              <col className="w-[39%]" />
+              <col className="w-[22%]" />
+              <col className="w-[18%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th>Thiện pháp</th>
@@ -228,14 +266,14 @@ export default async function PublicOrganizationPage({
             <tbody>
               {transactions.map((item) => (
                 <tr key={item.id}>
-                  <td className="whitespace-nowrap">
+                  <td>
                     {dateTime.format(item.transactionTime)}
                     <p className="text-xs text-[#8a948e] mt-1">
                       TK {item.bankAccount.accountNo}
                     </p>
                   </td>
-                  <td className="max-w-xl">
-                    <p className="line-clamp-2">{item.narrative}</p>
+                  <td>
+                    <p className="break-words">{item.narrative}</p>
                     <p className="text-xs text-[#8a948e] mt-1">
                       {item.displayName}
                     </p>
