@@ -1,11 +1,8 @@
 "use client";
 
-import { Plus, Users, X } from "lucide-react";
-import { useState } from "react";
-import {
-  createCustomerUserAction,
-  createDharmaAction,
-} from "@/app/actions";
+import { LoaderCircle, Plus, Users, X } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { createCustomerUserAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 
 type Props = {
@@ -22,11 +19,13 @@ function Modal({
   title,
   open,
   onClose,
+  disableClose = false,
   children,
 }: {
   title: string;
   open: boolean;
   onClose: () => void;
+  disableClose?: boolean;
   children: React.ReactNode;
 }) {
   if (!open) return null;
@@ -37,11 +36,12 @@ function Modal({
         aria-label="Đóng"
         className="absolute inset-0 bg-[#10251b]/55 backdrop-blur-[2px]"
         onClick={onClose}
+        disabled={disableClose}
       />
       <section className="card relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
         <header className="sticky top-0 z-10 flex items-center justify-between bg-white px-5 py-3 border-b border-[#e3e9e5]">
           <h2 className="font-semibold">{title}</h2>
-          <button type="button" className="grid place-items-center size-8 rounded-lg hover:bg-[#edf1ee]" onClick={onClose}>
+          <button type="button" disabled={disableClose} className="grid place-items-center size-8 rounded-lg hover:bg-[#edf1ee] disabled:opacity-40" onClick={onClose}>
             <X size={18} />
           </button>
         </header>
@@ -58,27 +58,102 @@ export function OrganizationManagementModals({
 }: Props) {
   const [dharmaOpen, setDharmaOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [dharmaProgress, setDharmaProgress] = useState<
+    "idle" | "creating" | "reclassifying" | "refreshing"
+  >("idle");
+  const [dharmaError, setDharmaError] = useState("");
+  const dharmaBusy = dharmaProgress !== "idle";
+  const progressMessage = {
+    idle: "Tạo thiện pháp",
+    creating: "Bước 1/3 · Đang lưu thiện pháp vào cơ sở dữ liệu...",
+    reclassifying: "Bước 2/3 · Đang quét và phân loại lại giao dịch...",
+    refreshing: "Bước 3/3 · Đang cập nhật danh sách và số liệu...",
+  }[dharmaProgress];
+
+  async function handleCreateDharma(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setDharmaError("");
+    setDharmaProgress("creating");
+    try {
+      const createResponse = await fetch("/api/dashboard/dharmas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          bankAccountId: String(formData.get("bankAccountId") || ""),
+          name: String(formData.get("name") || ""),
+          code: String(formData.get("code") || ""),
+          aliases: String(formData.get("aliases") || ""),
+        }),
+      });
+      const created = (await createResponse.json()) as {
+        data?: { id: string };
+        error?: string;
+      };
+      if (!createResponse.ok || !created.data)
+        throw new Error(created.error || "Không thể tạo thiện pháp");
+
+      setDharmaProgress("reclassifying");
+      const reclassifyResponse = await fetch(
+        `/api/dashboard/dharmas/${created.data.id}/reclassify`,
+        { method: "POST", headers: { Accept: "application/json" } },
+      );
+      const reclassified = (await reclassifyResponse.json()) as {
+        data?: { scanned: number; updated: number };
+        error?: string;
+      };
+      if (!reclassifyResponse.ok)
+        throw new Error(
+          reclassified.error || "Đã tạo thiện pháp nhưng chưa thể phân loại lại",
+        );
+
+      setDharmaProgress("refreshing");
+      window.setTimeout(() => window.location.assign("/dashboard#thien-phap"), 100);
+    } catch (error) {
+      setDharmaProgress("idle");
+      setDharmaError(
+        error instanceof Error ? error.message : "Không thể tạo thiện pháp",
+      );
+    }
+  }
+
+  function openDharmaModal() {
+    setDharmaError("");
+    setDharmaProgress("idle");
+    setDharmaOpen(true);
+  }
   return (
     <>
-      <button type="button" className="btn btn-soft" onClick={() => setDharmaOpen(true)}>
+      <button type="button" className="btn btn-soft" onClick={openDharmaModal}>
         <Plus size={16} /> Thêm thiện pháp
       </button>
       <button type="button" className="btn btn-soft" onClick={() => setMembersOpen(true)}>
         <Users size={16} /> Thành viên
       </button>
 
-      <Modal title="Thêm thiện pháp" open={dharmaOpen} onClose={() => setDharmaOpen(false)}>
-        <form action={createDharmaAction} className="grid sm:grid-cols-2 gap-3 p-5">
-          <select className="input" name="bankAccountId" required>
+      <Modal title="Thêm thiện pháp" open={dharmaOpen} disableClose={dharmaBusy} onClose={() => setDharmaOpen(false)}>
+        <form onSubmit={handleCreateDharma} className="grid sm:grid-cols-2 gap-3 p-5">
+          <select className="input" name="bankAccountId" required disabled={dharmaBusy}>
             <option value="">Chọn tài khoản</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>{account.name} — {account.accountNo}</option>
             ))}
           </select>
-          <input className="input" name="name" required placeholder="Tên thiện pháp" />
-          <input className="input" name="code" required placeholder="Mã chính" />
-          <input className="input" name="aliases" placeholder="Mã phụ, cách nhau dấu phẩy" />
-          <SubmitButton pendingText="Đang tạo..." className="btn btn-primary sm:col-span-2">Tạo thiện pháp</SubmitButton>
+          <input className="input" name="name" required disabled={dharmaBusy} placeholder="Tên thiện pháp" />
+          <input className="input" name="code" required disabled={dharmaBusy} placeholder="Mã chính" />
+          <input className="input" name="aliases" disabled={dharmaBusy} placeholder="Mã phụ, cách nhau dấu phẩy" />
+          {(dharmaBusy || dharmaError) && (
+            <div className={`sm:col-span-2 rounded-xl px-4 py-3 text-sm ${dharmaError ? "bg-red-50 text-red-700" : "bg-[#edf5f0] text-[#176b46]"}`} role="status">
+              {dharmaBusy && <LoaderCircle size={16} className="animate-spin inline mr-2" />}
+              {dharmaError || progressMessage}
+              {dharmaBusy && <p className="text-xs opacity-70 mt-1 ml-6">Vui lòng giữ cửa sổ này mở cho đến khi hoàn tất.</p>}
+            </div>
+          )}
+          <button type="submit" disabled={dharmaBusy} className="btn btn-primary sm:col-span-2">
+            {dharmaBusy && <LoaderCircle size={16} className="animate-spin" />}
+            {progressMessage}
+          </button>
         </form>
       </Modal>
 

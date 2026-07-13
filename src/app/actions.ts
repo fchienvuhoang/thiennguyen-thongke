@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { clearSession, requireSession } from "@/lib/auth";
 import { classifyTransaction } from "@/lib/classify-transaction";
 import { normalizeText, toSlug } from "@/lib/format";
+import { createDharma } from "@/lib/manage-dharma";
 import { reclassifyAccount } from "@/lib/sync";
 
 export async function logoutAction() {
@@ -52,20 +53,6 @@ async function availableOrganizationSlug(name: string) {
   )
     slug = `${base}-${suffix++}`;
   return slug;
-}
-
-async function availableDharmaSlug(organizationId: string, name: string) {
-  const base = toSlug(name);
-  let publicSlug = base;
-  let suffix = 2;
-  while (
-    await prisma.dharma.findFirst({
-      where: { organizationId, publicSlug },
-      select: { id: true },
-    })
-  )
-    publicSlug = `${base}-${suffix++}`;
-  return publicSlug;
 }
 
 export async function createBankAccountForOrganizationAction(
@@ -136,32 +123,13 @@ export async function updateBankAccountAction(formData: FormData) {
 
 export async function createDharmaAction(formData: FormData) {
   const session = await requireSession();
-  if (session.systemRole === "SUPER_ADMIN")
-    throw new Error("Quản trị hệ thống không quản lý thiện pháp");
-  const bankAccountId = String(formData.get("bankAccountId") || "");
-  const account = await prisma.bankAccount.findFirst({
-    where: { id: bankAccountId, organizationId: session.organizationId },
+  const dharma = await createDharma(session, {
+    bankAccountId: String(formData.get("bankAccountId") || ""),
+    name: String(formData.get("name") || ""),
+    code: String(formData.get("code") || ""),
+    aliases: String(formData.get("aliases") || ""),
   });
-  if (!account) throw new Error("Không tìm thấy tài khoản");
-  const name = String(formData.get("name") || "").trim();
-  const code = normalizeText(String(formData.get("code") || ""));
-  const aliases = String(formData.get("aliases") || "")
-    .split(",")
-    .map(normalizeText)
-    .filter(Boolean);
-  if (!name || !code) throw new Error("Tên và mã thiện pháp là bắt buộc");
-  const publicSlug = await availableDharmaSlug(session.organizationId, name);
-  await prisma.dharma.create({
-    data: {
-      organizationId: session.organizationId,
-      bankAccountId,
-      name,
-      publicSlug,
-      code,
-      aliases,
-    },
-  });
-  await reclassifyAccount(account.id);
+  await reclassifyAccount(dharma.bankAccountId);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/dharmas");
   revalidatePath("/dashboard/transactions");

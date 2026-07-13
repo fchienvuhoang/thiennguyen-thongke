@@ -92,6 +92,9 @@ export default async function DashboardPage({
       { amount: Number(row._sum.amount || 0), count: row._count },
     ]),
   );
+  const originalStatementUrl = accounts.find(
+    (account) => account.statementUrl,
+  )?.statementUrl;
   const cards = [
     [
       "Tổng thu",
@@ -150,7 +153,16 @@ export default async function DashboardPage({
             nhập.
           </p>
         </div>
-        <PublicLink href={`/minh-bach/${organization.slug}`} />
+        {originalStatementUrl ? (
+          <PublicLink
+            href={originalStatementUrl}
+            label="Xem trang Thiện Nguyện gốc"
+          />
+        ) : (
+          <span className="text-sm text-[#9a6412]">
+            Chưa cấu hình link Thiện Nguyện gốc
+          </span>
+        )}
       </section>
 
       <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">

@@ -316,6 +316,8 @@ export async function reclassifyAccount(bankAccountId: string) {
       id: true,
       narrative: true,
       dharmaId: true,
+      matchedCode: true,
+      classificationStatus: true,
       dharma: { select: { name: true } },
     },
   });
@@ -347,6 +349,12 @@ export async function reclassifyAccount(bankAccountId: string) {
           : ClassificationStatus.UNMATCHED;
     const dharmaId = matches.length === 1 ? matches[0].id : null;
     const matchedCode = matches.length === 1 ? matches[0].code : null;
+    const changed =
+      (transaction.dharmaId || null) !== dharmaId ||
+      (transaction.matchedCode || null) !== matchedCode ||
+      transaction.classificationStatus !== classificationStatus;
+    if (!changed) continue;
+
     const key = `${classificationStatus}:${dharmaId || ""}`;
     const group = groups.get(key) || {
       ids: [],
@@ -390,5 +398,9 @@ export async function reclassifyAccount(bankAccountId: string) {
     updates.push(prisma.classificationLog.createMany({ data: auditRows }));
   }
   if (updates.length) await prisma.$transaction(updates);
-  return transactions.length;
+  const updated = [...groups.values()].reduce(
+    (total, group) => total + group.ids.length,
+    0,
+  );
+  return { scanned: transactions.length, updated };
 }
