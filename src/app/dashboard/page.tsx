@@ -19,7 +19,15 @@ import { requireSession } from "@/lib/auth";
 import { dateTime, money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
-type Filters = { type?: string; status?: string; account?: string };
+type Filters = {
+  type?: string;
+  status?: string;
+  account?: string;
+  tab?: string;
+  page?: string;
+};
+
+const TRANSACTIONS_PER_PAGE = 25;
 
 export default async function DashboardPage({
   searchParams,
@@ -30,13 +38,18 @@ export default async function DashboardPage({
   if (session.systemRole === "SUPER_ADMIN") redirect("/dashboard/admin");
   const filters = await searchParams;
   const organizationId = session.organizationId;
+  const activeTab =
+    filters.tab || (filters.status === "UNMATCHED" ? "unmatched" : "all");
+  const currentPage = Math.max(1, Number.parseInt(filters.page || "1", 10) || 1);
   const transactionWhere: Prisma.TransactionWhereInput = {
     organizationId,
     ...(filters.type === "CREDIT" || filters.type === "DEBIT"
       ? { type: filters.type }
       : {}),
-    ...(filters.status === "UNMATCHED"
+    ...(activeTab === "unmatched"
       ? { classificationStatus: { in: ["UNMATCHED", "AMBIGUOUS"] } }
+      : activeTab !== "all"
+        ? { dharmaId: activeTab }
       : {}),
     ...(filters.account ? { bankAccountId: filters.account } : {}),
   };
@@ -83,7 +96,8 @@ export default async function DashboardPage({
       where: transactionWhere,
       include: { bankAccount: true, dharma: true },
       orderBy: { transactionTime: "desc" },
-      take: 100,
+      skip: (currentPage - 1) * TRANSACTIONS_PER_PAGE,
+      take: TRANSACTIONS_PER_PAGE,
     }),
     prisma.transaction.count({ where: transactionWhere }),
     prisma.transaction.groupBy({
@@ -101,6 +115,19 @@ export default async function DashboardPage({
   );
   const incomeTotal = Number(income._sum.amount || 0);
   const expenseTotal = Number(expense._sum.amount || 0);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredTotal / TRANSACTIONS_PER_PAGE),
+  );
+  const transactionUrl = (tab: string, page = 1) => {
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    if (filters.type === "CREDIT" || filters.type === "DEBIT")
+      params.set("type", filters.type);
+    if (filters.account) params.set("account", filters.account);
+    if (page > 1) params.set("page", String(page));
+    return `/dashboard?${params.toString()}#giao-dich`;
+  };
   const cards = [
     [
       "Tổng thu",
@@ -433,14 +460,15 @@ export default async function DashboardPage({
             <div>
               <h2 className="font-semibold text-lg">Các giao dịch</h2>
               <p className="text-sm text-[#7a867e] mt-1">
-                {filteredTotal.toLocaleString("vi-VN")} kết quả · hiển thị tối
-                đa 100 giao dịch gần nhất.
+                {filteredTotal.toLocaleString("vi-VN")} kết quả · trang {currentPage}
+                /{totalPages}.
               </p>
             </div>
             <form
               className="flex flex-wrap gap-2"
               action="/dashboard#giao-dich"
             >
+              <input type="hidden" name="tab" value={activeTab} />
               <select
                 className="input w-auto"
                 name="type"
@@ -449,14 +477,6 @@ export default async function DashboardPage({
                 <option value="ALL">Tất cả thu/chi</option>
                 <option value="CREDIT">Khoản thu</option>
                 <option value="DEBIT">Khoản chi</option>
-              </select>
-              <select
-                className="input w-auto"
-                name="status"
-                defaultValue={filters.status || "ALL"}
-              >
-                <option value="ALL">Mọi phân loại</option>
-                <option value="UNMATCHED">Chưa phân loại</option>
               </select>
               <select
                 className="input w-auto"
@@ -473,6 +493,38 @@ export default async function DashboardPage({
               <button className="btn btn-primary">Lọc</button>
             </form>
           </div>
+          <nav
+            className="flex gap-2 overflow-x-auto mt-5 pb-1"
+            aria-label="Phân loại giao dịch"
+          >
+            <a
+              href={transactionUrl("all")}
+              className={`btn py-2 whitespace-nowrap ${activeTab === "all" ? "btn-primary" : "btn-soft"}`}
+            >
+              Tất cả
+              <span className="text-xs opacity-75">
+                {transactionCount.toLocaleString("vi-VN")}
+              </span>
+            </a>
+            <a
+              href={transactionUrl("unmatched")}
+              className={`btn py-2 whitespace-nowrap border border-[#efc56f] ${activeTab === "unmatched" ? "bg-[#d99a24] text-white" : "bg-[#fff1d7] text-[#8a590d]"}`}
+            >
+              <TriangleAlert size={15} /> Chưa phân loại
+              <span className="text-xs opacity-80">
+                {unmatched.toLocaleString("vi-VN")}
+              </span>
+            </a>
+            {dharmas.map((dharma) => (
+              <a
+                key={dharma.id}
+                href={transactionUrl(dharma.id)}
+                className={`btn py-2 whitespace-nowrap ${activeTab === dharma.id ? "btn-primary" : "btn-soft"}`}
+              >
+                {dharma.name}
+              </a>
+            ))}
+          </nav>
         </div>
         <div className="table-wrap">
           <table>
@@ -558,6 +610,33 @@ export default async function DashboardPage({
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-[#e3e9e5] flex items-center justify-between gap-3">
+            {currentPage > 1 ? (
+              <a
+                className="btn btn-soft py-2"
+                href={transactionUrl(activeTab, currentPage - 1)}
+              >
+                ← Trang trước
+              </a>
+            ) : (
+              <span />
+            )}
+            <span className="text-sm text-[#68756d]">
+              Trang {currentPage} / {totalPages}
+            </span>
+            {currentPage < totalPages ? (
+              <a
+                className="btn btn-soft py-2"
+                href={transactionUrl(activeTab, currentPage + 1)}
+              >
+                Trang sau →
+              </a>
+            ) : (
+              <span />
+            )}
+          </div>
+        )}
       </section>
       <p className="text-center text-xs text-[#8a948e] mt-6">
         {transactionCount.toLocaleString("vi-VN")} giao dịch đã lưu trong hệ

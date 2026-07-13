@@ -176,6 +176,8 @@ export async function updateDharmaAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/dharmas");
   revalidatePath("/dashboard/transactions");
+  revalidatePath("/minh-bach/[slug]", "page");
+  revalidatePath("/minh-bach/[slug]/[dharmaId]", "page");
 }
 
 export async function deleteDharmaAction(formData: FormData) {

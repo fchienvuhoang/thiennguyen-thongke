@@ -23,15 +23,26 @@ type ApiResponse = {
   data: { items: ApiItem[]; page: number; pageSize: number; total: number };
 };
 
+const SYNC_LOOKBACK_DAYS = 3;
+const vietnamDate = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function isoDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return vietnamDate.format(date);
 }
 
 export async function syncAccount(
   bankAccountId: string,
   options?: { days?: number; maxPages?: number },
 ) {
-  const days = options?.days ?? 7;
+  const days = Math.min(
+    SYNC_LOOKBACK_DAYS,
+    Math.max(1, options?.days ?? SYNC_LOOKBACK_DAYS),
+  );
   const maxPages = options?.maxPages ?? 5;
   const staleLock = new Date(Date.now() - 5 * 60_000);
   const locked = await prisma.bankAccount.updateMany({
@@ -66,9 +77,9 @@ export async function syncAccount(
   let pages = 0;
 
   try {
-    const from = new Date();
-    from.setDate(from.getDate() - days);
     const to = new Date();
+    // Tính cả hôm nay: 3 ngày tương ứng hôm nay và 2 ngày liền trước.
+    const from = new Date(to.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
     for (const transactionType of [
       TransactionType.CREDIT,
       TransactionType.DEBIT,
@@ -269,6 +280,16 @@ export async function reclassifyAccount(bankAccountId: string) {
     select: { id: true, narrative: true },
   });
 
+  const groups = new Map<
+    string,
+    {
+      ids: string[];
+      dharmaId: string | null;
+      matchedCode: string | null;
+      classificationStatus: ClassificationStatus;
+    }
+  >();
+
   for (const transaction of transactions) {
     const normalized = normalizeText(transaction.narrative);
     const matches = account.dharmas.filter((dharma) =>
@@ -277,19 +298,40 @@ export async function reclassifyAccount(bankAccountId: string) {
         return candidate && ` ${normalized} `.includes(` ${candidate} `);
       }),
     );
-    await prisma.transaction.update({
-      where: { id: transaction.id },
-      data: {
-        dharmaId: matches.length === 1 ? matches[0].id : null,
-        matchedCode: matches.length === 1 ? matches[0].code : null,
-        classificationStatus:
-          matches.length === 1
-            ? ClassificationStatus.MATCHED
-            : matches.length > 1
-              ? ClassificationStatus.AMBIGUOUS
-              : ClassificationStatus.UNMATCHED,
-      },
-    });
+    const classificationStatus =
+      matches.length === 1
+        ? ClassificationStatus.MATCHED
+        : matches.length > 1
+          ? ClassificationStatus.AMBIGUOUS
+          : ClassificationStatus.UNMATCHED;
+    const dharmaId = matches.length === 1 ? matches[0].id : null;
+    const matchedCode = matches.length === 1 ? matches[0].code : null;
+    const key = `${classificationStatus}:${dharmaId || ""}`;
+    const group = groups.get(key) || {
+      ids: [],
+      dharmaId,
+      matchedCode,
+      classificationStatus,
+    };
+    group.ids.push(transaction.id);
+    groups.set(key, group);
   }
+
+  const updates = [];
+  for (const group of groups.values()) {
+    for (let offset = 0; offset < group.ids.length; offset += 500) {
+      updates.push(
+        prisma.transaction.updateMany({
+          where: { id: { in: group.ids.slice(offset, offset + 500) } },
+          data: {
+            dharmaId: group.dharmaId,
+            matchedCode: group.matchedCode,
+            classificationStatus: group.classificationStatus,
+          },
+        }),
+      );
+    }
+  }
+  if (updates.length) await prisma.$transaction(updates);
   return transactions.length;
 }
