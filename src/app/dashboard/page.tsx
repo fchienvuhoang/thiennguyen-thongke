@@ -15,8 +15,10 @@ import {
   updateDharmaAction,
 } from "@/app/actions";
 import { DeleteDharmaForm } from "@/components/delete-dharma-form";
+import { OrganizationManagementModals } from "@/components/organization-management-modals";
 import { PageHeader } from "@/components/page-header";
 import { PublicLink } from "@/components/public-link";
+import { SubmitButton } from "@/components/submit-button";
 import { requireSession } from "@/lib/auth";
 import { dateTime, money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -77,7 +79,10 @@ export default async function DashboardPage({
     }),
     prisma.dharma.findMany({
       where: { organizationId },
-      include: { bankAccount: true },
+      include: {
+        bankAccount: true,
+        _count: { select: { transactions: true } },
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.membership.findMany({
@@ -175,12 +180,11 @@ export default async function DashboardPage({
         description="Theo dõi, cấu hình và phân loại giao dịch tại một nơi."
         action={
           <div className="flex flex-wrap gap-2">
-            <a className="btn btn-soft" href="#thien-phap">
-              Thiện pháp
-            </a>
-            <a className="btn btn-soft" href="#cau-hinh">
-              Cấu hình
-            </a>
+            <OrganizationManagementModals
+              accounts={accounts}
+              members={members}
+              canManageMembers={session.organizationRole === "ADMIN"}
+            />
             <a className="btn btn-primary" href="#giao-dich">
               Các giao dịch
             </a>
@@ -188,7 +192,7 @@ export default async function DashboardPage({
         }
       />
 
-      <section className="card p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-l-[#d9a441]">
+      <section className="card px-4 py-3 mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border-l-4 border-l-[#d9a441]">
         <div>
           <p className="text-xs font-semibold tracking-wider text-[#9a6b1a]">
             TRANG MINH BẠCH CÔNG KHAI
@@ -202,22 +206,21 @@ export default async function DashboardPage({
         <PublicLink href={`/minh-bach/${organization.slug}`} />
       </section>
 
-      <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
         {cards.map(([label, value, Icon, color]) => (
-          <div className="card p-5" key={label}>
+          <div className="card px-4 py-3 flex items-center gap-3" key={label}>
             <div
-              className={`size-10 rounded-xl grid place-items-center ${color}`}
+              className={`size-9 shrink-0 rounded-xl grid place-items-center ${color}`}
             >
-              <Icon size={20} />
+              <Icon size={18} />
             </div>
-            <p className="text-[#718078] text-sm mt-5">{label}</p>
-            <p className="text-2xl font-semibold mt-1">{value}</p>
+            <div><p className="text-[#718078] text-xs">{label}</p><p className="text-lg font-semibold leading-tight mt-0.5">{value}</p></div>
           </div>
         ))}
       </section>
 
-      <section id="thien-phap" className="card mb-8 scroll-mt-24">
-        <div className="p-5 border-b border-[#e3e9e5]">
+      <section id="thien-phap" className="card mb-5 scroll-mt-24">
+        <div className="px-4 py-3 border-b border-[#e3e9e5]">
           <h2 className="font-semibold text-lg">Tổng thu các thiện pháp</h2>
           <p className="text-sm text-[#7a867e] mt-1">
             Tổng hợp từ các giao dịch CREDIT đã được phân loại.
@@ -234,6 +237,7 @@ export default async function DashboardPage({
                 <th>Giao dịch</th>
                 <th className="text-right">Tổng thu</th>
                 <th>Link công khai</th>
+                <th>Quản lý</th>
               </tr>
             </thead>
             <tbody>
@@ -269,12 +273,27 @@ export default async function DashboardPage({
                         href={`/minh-bach/${organization.slug}/${dharma.publicSlug}`}
                       />
                     </td>
+                    <td>
+                      <details className="min-w-64">
+                        <summary className="list-none btn btn-soft py-1.5">
+                          <Pencil size={14} /> Sửa
+                        </summary>
+                        <form action={updateDharmaAction} className="space-y-2 mt-2">
+                          <input type="hidden" name="id" value={dharma.id} />
+                          <input className="input py-1.5" name="name" required defaultValue={dharma.name} />
+                          <input className="input py-1.5" name="code" required defaultValue={dharma.code} />
+                          <input className="input py-1.5" name="aliases" defaultValue={dharma.aliases.join(", ")} />
+                          <SubmitButton pendingText="Đang lưu..." className="btn btn-primary w-full py-1.5">Lưu thay đổi</SubmitButton>
+                        </form>
+                        <div className="flex justify-end mt-2"><DeleteDharmaForm id={dharma.id} name={dharma.name} /></div>
+                      </details>
+                    </td>
                   </tr>
                 );
               })}
               {!dharmas.length && (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-[#7a867e]">
+                  <td colSpan={8} className="text-center py-10 text-[#7a867e]">
                     Chưa có thiện pháp.
                   </td>
                 </tr>
@@ -284,18 +303,14 @@ export default async function DashboardPage({
         </div>
       </section>
 
-      <section id="cau-hinh" className="scroll-mt-24 mb-8">
-        <div className="mb-4">
-          <h2 className="text-xl font-semibold">
-            Cấu hình đồng bộ và phân loại
-          </h2>
-          <p className="text-sm text-[#7a867e] mt-1">
-            Quản lý tài khoản nguồn và mã nhận diện thiện pháp.
-          </p>
-        </div>
-        <div className="grid xl:grid-cols-2 gap-6">
-          <div className="card">
-            <div className="p-5 border-b border-[#e3e9e5]">
+      <details id="cau-hinh" className="card scroll-mt-24 mb-5">
+        <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3">
+          <div><h2 className="font-semibold">Tài khoản nguồn đồng bộ</h2><p className="text-xs text-[#7a867e] mt-0.5">Bấm để xem thông tin tài khoản thiện nguyện.</p></div>
+          <span className="badge badge-gray">{accounts.length} tài khoản</span>
+        </summary>
+        <div className="border-t border-[#e3e9e5]">
+          <div className="border-0">
+            <div className="px-4 py-2.5 border-b border-[#e3e9e5]">
               <h3 className="font-semibold">Tài khoản thiện nguyện</h3>
               <p className="text-sm text-[#7a867e] mt-1">
                 Các tài khoản do quản trị hệ thống cấp; dữ liệu được đồng bộ tự
@@ -351,7 +366,7 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          <div className="card p-5">
+          <div className="hidden card p-5">
             <h3 className="font-semibold">Thêm thiện pháp</h3>
             <form
               action={createDharmaAction}
@@ -382,14 +397,14 @@ export default async function DashboardPage({
                 name="aliases"
                 placeholder="Mã phụ, cách nhau dấu phẩy"
               />
-              <button className="btn btn-primary sm:col-span-2">
+              <SubmitButton pendingText="Đang tạo..." className="btn btn-primary sm:col-span-2">
                 Tạo thiện pháp
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
 
-        <div className="card table-wrap mt-6">
+        <div className="hidden card table-wrap mt-6">
           <table>
             <thead>
               <tr>
@@ -450,9 +465,9 @@ export default async function DashboardPage({
                           name="aliases"
                           defaultValue={dharma.aliases.join(", ")}
                         />
-                        <button className="btn btn-primary w-full py-2">
+                        <SubmitButton pendingText="Đang lưu..." className="btn btn-primary w-full py-2">
                           Lưu thay đổi
-                        </button>
+                        </SubmitButton>
                       </form>
                       <div className="flex justify-end mt-2">
                         <DeleteDharmaForm id={dharma.id} name={dharma.name} />
@@ -465,7 +480,7 @@ export default async function DashboardPage({
           </table>
         </div>
 
-        <div className="card mt-6">
+        <div className="hidden card mt-6">
           <div className="p-5 border-b border-[#e3e9e5] flex items-center gap-3">
             <UserPlus size={19} className="text-[#176b46]" />
             <div>
@@ -500,15 +515,15 @@ export default async function DashboardPage({
                   <option value="MEMBER">Thành viên</option>
                   <option value="ADMIN">Quản trị tổ chức</option>
                 </select>
-                <button className="btn btn-primary w-full">Thêm thành viên</button>
+                <SubmitButton pendingText="Đang thêm..." className="btn btn-primary w-full">Thêm thành viên</SubmitButton>
               </form>
             )}
           </div>
         </div>
-      </section>
+      </details>
 
       <section id="giao-dich" className="card scroll-mt-24">
-        <div className="p-5 border-b border-[#e3e9e5]">
+        <div className="px-4 py-3 border-b border-[#e3e9e5]">
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
             <div>
               <h2 className="font-semibold text-lg">Các giao dịch</h2>
@@ -575,6 +590,9 @@ export default async function DashboardPage({
                 className={`btn py-2 whitespace-nowrap ${activeTab === dharma.id ? "btn-primary" : "btn-soft"}`}
               >
                 {dharma.name}
+                <span className="text-xs opacity-75">
+                  {dharma._count.transactions.toLocaleString("vi-VN")}
+                </span>
               </a>
             ))}
           </nav>
@@ -636,7 +654,7 @@ export default async function DashboardPage({
                             </option>
                           ))}
                         </select>
-                        <button className="btn btn-soft py-2">Gán</button>
+                        <SubmitButton pendingText="Đang gán..." className="btn btn-soft py-2">Gán</SubmitButton>
                       </form>
                       <div className="mt-2">
                         {transaction.manuallyClassified ? (

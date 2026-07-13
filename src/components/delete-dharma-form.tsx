@@ -2,6 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { deleteDharmaAction } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export function DeleteDharmaForm({ id, name }: { id: string; name: string }) {
   return (
@@ -14,9 +15,9 @@ export function DeleteDharmaForm({ id, name }: { id: string; name: string }) {
       }}
     >
       <input type="hidden" name="id" value={id} />
-      <button className="btn bg-red-50 text-red-700 hover:bg-red-100" type="submit">
+      <SubmitButton pendingText="Đang xóa..." className="btn bg-red-50 text-red-700 hover:bg-red-100">
         <Trash2 size={15} /> Xóa
-      </button>
+      </SubmitButton>
     </form>
   );
 }

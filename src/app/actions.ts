@@ -97,6 +97,42 @@ export async function createBankAccountForOrganizationAction(
   revalidatePath("/dashboard/admin");
 }
 
+export async function updateBankAccountAction(formData: FormData) {
+  const session = await requireSession();
+  if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");
+  const id = String(formData.get("id") || "");
+  const organizationId = String(formData.get("organizationId") || "");
+  const account = await prisma.bankAccount.findFirst({
+    where: { id, organizationId },
+    select: { id: true },
+  });
+  if (!account) throw new Error("Không tìm thấy tài khoản ngân hàng");
+  const source = String(formData.get("source") || "");
+  const accountNo = accountNoFromInput(source);
+  const name = String(formData.get("name") || "").trim();
+  const statementUrl = statementUrlFromInput(
+    String(formData.get("statementUrl") || ""),
+  );
+  if (!/^\d{3,20}$/.test(accountNo) || !name)
+    throw new Error("Thông tin tài khoản không hợp lệ");
+  const enabled = formData.get("enabled") === "on";
+  const syncEnabled = formData.get("syncEnabled") === "on";
+  await prisma.bankAccount.update({
+    where: { id: account.id },
+    data: {
+      name,
+      accountNo,
+      sourceUrl: source.startsWith("http") ? source : null,
+      statementUrl,
+      enabled,
+      syncEnabled,
+      ...(enabled && syncEnabled ? { nextSyncAt: new Date() } : {}),
+    },
+  });
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard");
+}
+
 export async function createDharmaAction(formData: FormData) {
   const session = await requireSession();
   if (session.systemRole === "SUPER_ADMIN")
@@ -124,7 +160,10 @@ export async function createDharmaAction(formData: FormData) {
       aliases,
     },
   });
+  await reclassifyAccount(account.id);
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/dharmas");
+  revalidatePath("/dashboard/transactions");
 }
 
 export async function updateDharmaAction(formData: FormData) {
@@ -361,4 +400,35 @@ export async function createCustomerUserAction(formData: FormData) {
   });
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard");
+}
+
+export async function updateOrganizationMemberAction(formData: FormData) {
+  const session = await requireSession();
+  if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");
+  const membershipId = String(formData.get("membershipId") || "");
+  const organizationId = String(formData.get("organizationId") || "");
+  const membership = await prisma.membership.findFirst({
+    where: { id: membershipId, organizationId },
+    select: { id: true, userId: true },
+  });
+  if (!membership) throw new Error("Không tìm thấy thành viên trong tổ chức");
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "")
+    .trim()
+    .toLowerCase();
+  const role =
+    String(formData.get("role") || "MEMBER") === "ADMIN" ? "ADMIN" : "MEMBER";
+  const enabled = formData.get("enabled") === "on";
+  if (!name || !email) throw new Error("Thông tin thành viên chưa hợp lệ");
+  await prisma.$transaction([
+    prisma.membership.update({
+      where: { id: membership.id },
+      data: { role },
+    }),
+    prisma.user.update({
+      where: { id: membership.userId },
+      data: { name, email, enabled },
+    }),
+  ]);
+  revalidatePath("/dashboard/admin");
 }

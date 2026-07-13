@@ -1,12 +1,16 @@
 "use client";
 
-import { Landmark, Pencil, Plus, X } from "lucide-react";
+import { Landmark, Pencil, Plus, UserPlus, X } from "lucide-react";
 import { useState } from "react";
 import {
   createBankAccountForOrganizationAction,
+  createCustomerUserAction,
   createOrganizationUserAction,
+  updateBankAccountAction,
   updateCustomerAction,
+  updateOrganizationMemberAction,
 } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 type Customer = {
   id: string;
@@ -15,14 +19,16 @@ type Customer = {
   memberships: {
     id: string;
     role: "ADMIN" | "MEMBER";
-    user: { id: string; name: string; email: string };
+    user: { id: string; name: string; email: string; enabled: boolean; googleSubject: string | null };
   }[];
   bankAccounts: {
     id: string;
     name: string;
     accountNo: string;
+    sourceUrl: string | null;
     statementUrl: string | null;
     enabled: boolean;
+    syncEnabled: boolean;
   }[];
 };
 
@@ -102,7 +108,7 @@ export function CreateCustomerButton() {
             >
               Hủy
             </button>
-            <button className="btn btn-primary">Tạo khách hàng</button>
+            <SubmitButton pendingText="Đang tạo..." className="btn btn-primary">Tạo khách hàng</SubmitButton>
           </div>
         </form>
       </Modal>
@@ -175,10 +181,73 @@ export function EditCustomerButton({ customer }: { customer: Customer }) {
               <p className="sm:col-span-2 text-sm text-[#718078]">Tài khoản sử dụng Google SSO, không có mật khẩu riêng trong hệ thống.</p>
             </div>
             <div className="flex justify-end">
-              <button className="btn btn-primary">Lưu thông tin</button>
+              <SubmitButton pendingText="Đang lưu..." className="btn btn-primary">Lưu thông tin</SubmitButton>
             </div>
           </form>
         )}
+
+        <div className="p-6 border-t border-[#e3e9e5]">
+          <div className="flex items-center gap-2 mb-4">
+            <UserPlus size={18} className="text-[#176b46]" />
+            <div>
+              <h3 className="font-semibold">Tài khoản SSO của tổ chức</h3>
+              <p className="text-sm text-[#718078] mt-1">
+                Mỗi Gmail bên dưới có thể đăng nhập và làm việc trong tổ chức này.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2 mb-5">
+            {customer.memberships.map((membership) => (
+              <details key={membership.id} className="rounded-xl bg-[#f5f7f4] px-4 py-3">
+                <summary className="cursor-pointer list-none flex items-center justify-between gap-4">
+                  <div><p className="font-medium">{membership.user.name}</p><p className="text-xs text-[#718078] mt-1">{membership.user.email}</p></div>
+                  <div className="flex gap-2"><span className={`badge ${membership.user.enabled ? "badge-green" : "badge-gray"}`}>{membership.user.enabled ? "Hoạt động" : "Đã tắt"}</span><span className="badge badge-gray">{membership.role === "ADMIN" ? "Quản trị" : "Thành viên"}</span><Pencil size={15} /></div>
+                </summary>
+                <form action={updateOrganizationMemberAction} className="grid sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-[#dfe6e1]">
+                  <input type="hidden" name="membershipId" value={membership.id} />
+                  <input type="hidden" name="organizationId" value={customer.id} />
+                  <div><label className="label">Tên thành viên</label><input className="input" name="name" required defaultValue={membership.user.name} /></div>
+                  <div><label className="label">Gmail đăng nhập</label><input className="input" type="email" name="email" required defaultValue={membership.user.email} /></div>
+                  <div><label className="label">Quyền</label><select className="input" name="role" defaultValue={membership.role}><option value="MEMBER">Thành viên</option><option value="ADMIN">Quản trị tổ chức</option></select></div>
+                  <label className="flex items-center gap-2 text-sm self-end min-h-11"><input type="checkbox" name="enabled" defaultChecked={membership.user.enabled} /> Cho phép đăng nhập</label>
+                  <SubmitButton pendingText="Đang lưu..." className="btn btn-primary sm:col-span-2">Lưu tài khoản SSO</SubmitButton>
+                </form>
+              </details>
+            ))}
+          </div>
+          <form
+            action={createCustomerUserAction}
+            className="grid sm:grid-cols-2 gap-4"
+          >
+            <input type="hidden" name="organizationId" value={customer.id} />
+            <div>
+              <label className="label">Tên thành viên</label>
+              <input className="input" name="name" required />
+            </div>
+            <div>
+              <label className="label">Gmail đăng nhập SSO</label>
+              <input
+                className="input"
+                type="email"
+                name="email"
+                required
+                placeholder="email@gmail.com"
+              />
+            </div>
+            <div>
+              <label className="label">Quyền trong tổ chức</label>
+              <select className="input" name="role" defaultValue="MEMBER">
+                <option value="MEMBER">Thành viên</option>
+                <option value="ADMIN">Quản trị tổ chức</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <SubmitButton pendingText="Đang thêm..." className="btn btn-primary w-full">
+                <Plus size={17} /> Thêm tài khoản SSO
+              </SubmitButton>
+            </div>
+          </form>
+        </div>
 
         <div className="p-6 border-t border-[#e3e9e5]">
           <div className="flex items-center gap-2 mb-4">
@@ -187,20 +256,22 @@ export function EditCustomerButton({ customer }: { customer: Customer }) {
           </div>
           <div className="space-y-2 mb-5">
             {customer.bankAccounts.map((account) => (
-              <div
-                key={account.id}
-                className="flex items-center justify-between gap-4 rounded-xl bg-[#f5f7f4] px-4 py-3"
-              >
-                <div>
-                  <p className="font-medium">{account.name}</p>
-                  <p className="text-xs text-[#718078]">
-                    Số tài khoản: {account.accountNo}
-                  </p>
-                </div>
-                <span className={`badge ${account.enabled ? "badge-green" : "badge-gray"}`}>
-                  {account.enabled ? "Hoạt động" : "Đã tắt"}
-                </span>
-              </div>
+              <details key={account.id} className="rounded-xl bg-[#f5f7f4] px-4 py-3">
+                <summary className="cursor-pointer list-none flex items-center justify-between gap-4">
+                  <div><p className="font-medium">{account.name}</p><p className="text-xs text-[#718078]">Số tài khoản: {account.accountNo}</p></div>
+                  <div className="flex gap-2"><span className={`badge ${account.enabled ? "badge-green" : "badge-gray"}`}>{account.enabled ? "Hoạt động" : "Đã tắt"}</span><Pencil size={15} /></div>
+                </summary>
+                <form action={updateBankAccountAction} className="grid sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-[#dfe6e1]">
+                  <input type="hidden" name="id" value={account.id} />
+                  <input type="hidden" name="organizationId" value={customer.id} />
+                  <div><label className="label">Tên tài khoản</label><input className="input" name="name" required defaultValue={account.name} /></div>
+                  <div><label className="label">Số tài khoản hoặc URL API</label><input className="input" name="source" required defaultValue={account.sourceUrl || account.accountNo} /></div>
+                  <div className="sm:col-span-2"><label className="label">Link sao kê gốc</label><input className="input" type="url" name="statementUrl" defaultValue={account.statementUrl || ""} /></div>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" defaultChecked={account.enabled} /> Tài khoản hoạt động</label>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="syncEnabled" defaultChecked={account.syncEnabled} /> Bật đồng bộ tự động</label>
+                  <SubmitButton pendingText="Đang lưu..." className="btn btn-primary sm:col-span-2">Lưu tài khoản ngân hàng</SubmitButton>
+                </form>
+              </details>
             ))}
             {!customer.bankAccounts.length && (
               <p className="text-sm text-[#8a948e]">Chưa gán tài khoản nào.</p>
@@ -239,9 +310,9 @@ export function EditCustomerButton({ customer }: { customer: Customer }) {
               />
             </div>
             <div className="sm:col-span-2 flex justify-end">
-              <button className="btn btn-soft">
+              <SubmitButton pendingText="Đang gán..." className="btn btn-soft">
                 <Plus size={17} /> Gán tài khoản ngân hàng
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </div>

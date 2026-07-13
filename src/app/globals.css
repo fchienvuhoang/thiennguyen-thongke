@@ -5,13 +5,14 @@ body { margin:0; background:var(--cream); color:var(--ink); font-family:var(--fo
 button,input,select { font:inherit; } button { cursor:pointer; }
 .card { background:white; border:1px solid var(--line); border-radius:18px; box-shadow:0 1px 2px rgba(20,45,30,.03); }
 .label { display:block; margin-bottom:7px; color:#536158; font-size:13px; font-weight:600; }
-.input { width:100%; border:1px solid #d8e0da; border-radius:11px; background:white; padding:11px 13px; outline:none; transition:.2s; }
+.input { width:100%; border:1px solid #d8e0da; border-radius:11px; background:white; padding:9px 11px; outline:none; transition:.2s; }
 .input:focus { border-color:#4e9774; box-shadow:0 0 0 3px rgba(23,107,70,.09); }
-.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:11px; padding:10px 15px; font-weight:600; transition:.2s; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:0; border-radius:10px; padding:8px 12px; font-weight:600; transition:.2s; }
+.btn:disabled { cursor:not-allowed; opacity:.65; }
 .btn-primary { background:var(--green); color:white; } .btn-primary:hover { background:var(--green-dark); }
 .btn-soft { background:#eaf3ee; color:var(--green-dark); }
 .table-wrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; }
-th { color:#77827b; font-size:12px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:12px 16px; border-bottom:1px solid var(--line); }
-td { padding:14px 16px; border-bottom:1px solid #edf1ee; font-size:14px; } tr:last-child td { border-bottom:0; }
+th { color:#77827b; font-size:12px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:9px 14px; border-bottom:1px solid var(--line); }
+td { padding:10px 14px; border-bottom:1px solid #edf1ee; font-size:14px; } tr:last-child td { border-bottom:0; }
 .badge { display:inline-flex; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:700; }
 .badge-green { background:#e3f3ea; color:#176b46; } .badge-amber { background:#fff1d7; color:#9a6412; } .badge-gray { background:#edf0ee; color:#67716a; }
