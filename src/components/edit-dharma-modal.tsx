@@ -41,6 +41,7 @@ export function EditDharmaModal({
       const updateResponse = await fetch(`/api/dashboard/dharmas/${dharma.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           name: String(formData.get("name") || ""),
           code: String(formData.get("code") || ""),
@@ -54,7 +55,11 @@ export function EditDharmaModal({
       setProgress("reclassifying");
       const reclassifyResponse = await fetch(
         `/api/dashboard/dharmas/${dharma.id}/reclassify`,
-        { method: "POST", headers: { Accept: "application/json" } },
+        {
+          method: "POST",
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(30_000),
+        },
       );
       const reclassified = (await reclassifyResponse.json()) as { error?: string };
       if (!reclassifyResponse.ok)
@@ -63,11 +68,18 @@ export function EditDharmaModal({
         );
 
       setProgress("refreshing");
-      window.setTimeout(() => window.location.assign("/dashboard#thien-phap"), 100);
+      window.setTimeout(() => {
+        window.history.replaceState(null, "", "/dashboard#thien-phap");
+        window.location.reload();
+      }, 100);
     } catch (submitError) {
       setProgress("idle");
       setError(
-        submitError instanceof Error ? submitError.message : "Không thể lưu thay đổi",
+        submitError instanceof DOMException && submitError.name === "TimeoutError"
+          ? "Xử lý quá 30 giây. Vui lòng thử lại."
+          : submitError instanceof Error
+            ? submitError.message
+            : "Không thể lưu thay đổi",
       );
     }
   }

@@ -87,6 +87,7 @@ export function OrganizationManagementModals({
       const createResponse = await fetch("/api/dashboard/dharmas", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           bankAccountId: String(formData.get("bankAccountId") || ""),
           name: String(formData.get("name") || ""),
@@ -104,7 +105,11 @@ export function OrganizationManagementModals({
       setDharmaProgress("reclassifying");
       const reclassifyResponse = await fetch(
         `/api/dashboard/dharmas/${created.data.id}/reclassify`,
-        { method: "POST", headers: { Accept: "application/json" } },
+        {
+          method: "POST",
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(30_000),
+        },
       );
       const reclassified = (await reclassifyResponse.json()) as {
         data?: { scanned: number; updated: number };
@@ -116,11 +121,18 @@ export function OrganizationManagementModals({
         );
 
       setDharmaProgress("refreshing");
-      window.setTimeout(() => window.location.assign("/dashboard#thien-phap"), 100);
+      window.setTimeout(() => {
+        window.history.replaceState(null, "", "/dashboard#thien-phap");
+        window.location.reload();
+      }, 100);
     } catch (error) {
       setDharmaProgress("idle");
       setDharmaError(
-        error instanceof Error ? error.message : "Không thể tạo thiện pháp",
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "Xử lý quá 30 giây. Vui lòng thử lại."
+          : error instanceof Error
+            ? error.message
+            : "Không thể tạo thiện pháp",
       );
     }
   }
