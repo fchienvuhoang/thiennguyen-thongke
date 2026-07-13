@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum OrganizationRole {
+  ADMIN
+  MEMBER
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum ClassificationStatus {
+  MATCHED
+  UNMATCHED
+  AMBIGUOUS
+  MANUAL
+  IGNORED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  systemRole   SystemRole   @default(USER)
+  enabled      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+}
+
+model Organization {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  enabled      Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  memberships  Membership[]
+  bankAccounts BankAccount[]
+  dharmas      Dharma[]
+  transactions Transaction[]
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model BankAccount {
+  id             String        @id @default(cuid())
+  organizationId String
+  accountNo      String        @unique
+  name           String
+  sourceUrl      String?
+  enabled        Boolean       @default(true)
+  syncEnabled    Boolean       @default(true)
+  lastSyncedAt   DateTime?
+  nextSyncAt     DateTime      @default(now())
+  syncStatus     SyncStatus?
+  syncLockedAt   DateTime?
+  lastSyncError  String?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dharmas        Dharma[]
+  transactions   Transaction[]
+  syncRuns       SyncRun[]
+
+  @@index([organizationId])
+  @@index([syncEnabled, nextSyncAt])
+}
+
+model Dharma {
+  id             String        @id @default(cuid())
+  organizationId String
+  bankAccountId  String
+  name           String
+  code           String
+  aliases        String[]
+  enabled        Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccount    BankAccount   @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@unique([bankAccountId, code])
+  @@index([organizationId])
+}
+
+model Transaction {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  bankAccountId        String
+  dharmaId             String?
+  externalId           String
+  refId                String?
+  type                 TransactionType
+  amount               Decimal              @db.Decimal(20, 2)
+  transactionTime      DateTime
+  narrative            String
+  normalizedNarrative  String
+  displayName          String?
+  classificationStatus ClassificationStatus @default(UNMATCHED)
+  matchedCode          String?
+  manuallyClassified   Boolean              @default(false)
+  rawData              Json
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccount          BankAccount          @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  dharma               Dharma?              @relation(fields: [dharmaId], references: [id], onDelete: SetNull)
+
+  @@unique([bankAccountId, externalId])
+  @@unique([bankAccountId, refId])
+  @@index([organizationId, transactionTime])
+  @@index([dharmaId, transactionTime])
+  @@index([bankAccountId, transactionTime])
+  @@index([organizationId, classificationStatus])
+}
+
+model SyncRun {
+  id            String      @id @default(cuid())
+  bankAccountId String
+  status        SyncStatus
+  pages         Int         @default(0)
+  received      Int         @default(0)
+  inserted      Int         @default(0)
+  error         String?
+  startedAt     DateTime    @default(now())
+  finishedAt    DateTime?
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId, startedAt])
+}
