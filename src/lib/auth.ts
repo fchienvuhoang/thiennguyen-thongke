@@ -9,6 +9,7 @@ export type Session = {
   userId: string;
   organizationId: string;
   name: string;
+  email: string;
   systemRole: "SUPER_ADMIN" | "USER";
   organizationRole: "ADMIN" | "MEMBER";
 };

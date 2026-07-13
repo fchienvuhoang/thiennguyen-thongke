@@ -13,7 +13,24 @@ pnpm db:seed
 pnpm dev
 ```
 
-Tài khoản seed lấy từ `ADMIN_EMAIL` và `ADMIN_PASSWORD`.
+Tài khoản super admin seed lấy từ `ADMIN_EMAIL` và đăng nhập bằng Google SSO.
+
+## Đăng nhập Google
+
+Tạo OAuth Client loại **Web application** trong Google Cloud, sau đó cấu hình:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `APP_URL` là URL gốc của ứng dụng, ví dụ `https://example.com`
+- Authorized redirect URI: `${APP_URL}/api/auth/google/callback`
+
+Các redirect URI cần khai báo trong Google Cloud cho dự án này:
+
+- `https://thiennguyen-thongke.vercel.app/api/auth/google/callback`
+- `http://localhost:3000/api/auth/google/callback`
+- `http://localhost:3001/api/auth/google/callback`
+
+Địa chỉ Gmail phải được quản trị tổ chức thêm trước trong mục **Thành viên tổ chức**. Tổ chức trong app không yêu cầu hoặc liên kết với domain email; hệ thống không tự cấp quyền cho Gmail chưa được thêm.
 
 ## Deploy Vercel
 

@@ -36,27 +36,35 @@ enum SyncStatus {
   FAILED
 }
 
+enum ClassificationSource {
+  AUTO_SYNC
+  AUTO_RECLASSIFY
+  MANUAL
+}
+
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String
-  passwordHash String
-  systemRole   SystemRole   @default(USER)
-  enabled      Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  memberships  Membership[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String
+  googleSubject      String?             @unique
+  systemRole         SystemRole          @default(USER)
+  enabled            Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  memberships        Membership[]
+  classificationLogs ClassificationLog[]
 }
 
 model Organization {
-  id           String        @id @default(cuid())
-  name         String
-  slug         String        @unique
-  enabled      Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  memberships  Membership[]
-  bankAccounts BankAccount[]
-  dharmas      Dharma[]
-  transactions Transaction[]
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  enabled            Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  memberships        Membership[]
+  bankAccounts       BankAccount[]
+  dharmas            Dharma[]
+  transactions       Transaction[]
+  classificationLogs ClassificationLog[]
 }
 
 model Membership {
@@ -130,12 +138,15 @@ model Transaction {
   classificationStatus ClassificationStatus @default(UNMATCHED)
   matchedCode          String?
   manuallyClassified   Boolean              @default(false)
+  classifiedByEmail    String?
+  classifiedAt         DateTime?
   rawData              Json
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   bankAccount          BankAccount          @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
   dharma               Dharma?              @relation(fields: [dharmaId], references: [id], onDelete: SetNull)
+  classificationLogs   ClassificationLog[]
 
   @@unique([bankAccountId, externalId])
   @@unique([bankAccountId, refId])
@@ -145,6 +156,27 @@ model Transaction {
   @@index([dharmaId, type, transactionTime])
   @@index([bankAccountId, transactionTime])
   @@index([organizationId, classificationStatus])
+}
+
+model ClassificationLog {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  transactionId      String
+  actorUserId        String?
+  actorEmail         String?
+  source             ClassificationSource
+  previousDharmaId   String?
+  previousDharmaName String?
+  newDharmaId        String?
+  newDharmaName      String?
+  createdAt          DateTime             @default(now())
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transaction        Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  actor              User?                @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([transactionId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model SyncRun {

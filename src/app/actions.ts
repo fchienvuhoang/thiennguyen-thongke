@@ -1,39 +1,11 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { clearSession, createSession, requireSession } from "@/lib/auth";
+import { clearSession, requireSession } from "@/lib/auth";
 import { normalizeText, toSlug } from "@/lib/format";
 import { reclassifyAccount } from "@/lib/sync";
-
-export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") || "")
-    .trim()
-    .toLowerCase();
-  const password = String(formData.get("password") || "");
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { memberships: { include: { organization: true }, take: 1 } },
-  });
-  if (
-    !user?.enabled ||
-    !user.memberships[0] ||
-    !(await bcrypt.compare(password, user.passwordHash))
-  ) {
-    redirect("/login?error=1");
-  }
-  const membership = user.memberships[0];
-  await createSession({
-    userId: user.id,
-    organizationId: membership.organizationId,
-    name: user.name,
-    systemRole: user.systemRole,
-    organizationRole: membership.role,
-  });
-  redirect("/dashboard");
-}
 
 export async function logoutAction() {
   await clearSession();
@@ -214,19 +186,40 @@ export async function classifyTransactionAction(formData: FormData) {
   const dharmaId = String(formData.get("dharmaId") || "");
   const transaction = await prisma.transaction.findFirst({
     where: { id: transactionId, organizationId: session.organizationId },
+    include: { dharma: { select: { id: true, name: true } } },
   });
   if (!transaction) throw new Error("Không tìm thấy giao dịch");
 
+  const actor = await prisma.user.findUniqueOrThrow({
+    where: { id: session.userId },
+    select: { id: true, email: true },
+  });
+
   if (!dharmaId) {
-    await prisma.transaction.update({
-      where: { id: transaction.id },
-      data: {
-        dharmaId: null,
-        matchedCode: null,
-        manuallyClassified: false,
-        classificationStatus: "UNMATCHED",
-      },
-    });
+    await prisma.$transaction([
+      prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          dharmaId: null,
+          matchedCode: null,
+          manuallyClassified: true,
+          classificationStatus: "MANUAL",
+          classifiedByEmail: actor.email,
+          classifiedAt: new Date(),
+        },
+      }),
+      prisma.classificationLog.create({
+        data: {
+          organizationId: session.organizationId,
+          transactionId: transaction.id,
+          actorUserId: actor.id,
+          actorEmail: actor.email,
+          source: "MANUAL",
+          previousDharmaId: transaction.dharmaId,
+          previousDharmaName: transaction.dharma?.name,
+        },
+      }),
+    ]);
   } else {
     const dharma = await prisma.dharma.findFirst({
       where: {
@@ -237,15 +230,32 @@ export async function classifyTransactionAction(formData: FormData) {
     });
     if (!dharma)
       throw new Error("Thiện pháp không thuộc tài khoản của giao dịch");
-    await prisma.transaction.update({
-      where: { id: transaction.id },
-      data: {
-        dharmaId: dharma.id,
-        matchedCode: dharma.code,
-        manuallyClassified: true,
-        classificationStatus: "MANUAL",
-      },
-    });
+    await prisma.$transaction([
+      prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          dharmaId: dharma.id,
+          matchedCode: dharma.code,
+          manuallyClassified: true,
+          classificationStatus: "MANUAL",
+          classifiedByEmail: actor.email,
+          classifiedAt: new Date(),
+        },
+      }),
+      prisma.classificationLog.create({
+        data: {
+          organizationId: session.organizationId,
+          transactionId: transaction.id,
+          actorUserId: actor.id,
+          actorEmail: actor.email,
+          source: "MANUAL",
+          previousDharmaId: transaction.dharmaId,
+          previousDharmaName: transaction.dharma?.name,
+          newDharmaId: dharma.id,
+          newDharmaName: dharma.name,
+        },
+      }),
+    ]);
   }
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/transactions");
@@ -261,11 +271,9 @@ export async function createOrganizationUserAction(formData: FormData) {
   const email = String(formData.get("email") || "")
     .trim()
     .toLowerCase();
-  const password = String(formData.get("password") || "");
-  if (!organizationName || !name || !email || password.length < 8)
+  if (!organizationName || !name || !email)
     throw new Error("Thông tin chưa hợp lệ");
   const slug = await availableOrganizationSlug(organizationName);
-  const passwordHash = await bcrypt.hash(password, 12);
   await prisma.organization.create({
     data: {
       name: organizationName,
@@ -273,7 +281,7 @@ export async function createOrganizationUserAction(formData: FormData) {
       memberships: {
         create: {
           role: "ADMIN",
-          user: { create: { name, email, passwordHash } },
+          user: { create: { name, email } },
         },
       },
     },
@@ -293,7 +301,6 @@ export async function updateCustomerAction(formData: FormData) {
   const email = String(formData.get("email") || "")
     .trim()
     .toLowerCase();
-  const password = String(formData.get("password") || "");
   const organization = await prisma.organization.findFirst({
     where: {
       id: organizationId,
@@ -303,8 +310,6 @@ export async function updateCustomerAction(formData: FormData) {
   });
   if (!organization || !organizationName || !name || !email)
     throw new Error("Thông tin khách hàng chưa hợp lệ");
-  if (password && password.length < 8)
-    throw new Error("Mật khẩu phải có ít nhất 8 ký tự");
   await prisma.$transaction([
     prisma.organization.update({
       where: { id: organization.id },
@@ -316,9 +321,6 @@ export async function updateCustomerAction(formData: FormData) {
         name,
         email,
         enabled: true,
-        ...(password
-          ? { passwordHash: await bcrypt.hash(password, 12) }
-          : {}),
       },
     }),
   ]);
@@ -327,45 +329,36 @@ export async function updateCustomerAction(formData: FormData) {
 
 export async function createCustomerUserAction(formData: FormData) {
   const session = await requireSession();
-  if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");
-  const organizationId = String(formData.get("organizationId") || "");
+  const requestedOrganizationId = String(
+    formData.get("organizationId") || "",
+  );
+  const organizationId =
+    session.systemRole === "SUPER_ADMIN"
+      ? requestedOrganizationId
+      : session.organizationId;
+  if (
+    session.systemRole !== "SUPER_ADMIN" &&
+    session.organizationRole !== "ADMIN"
+  )
+    throw new Error("Không có quyền thêm thành viên");
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "")
     .trim()
     .toLowerCase();
-  const password = String(formData.get("password") || "");
   const role =
     String(formData.get("role") || "MEMBER") === "ADMIN" ? "ADMIN" : "MEMBER";
   const organization = await prisma.organization.findFirst({
     where: { id: organizationId, enabled: true },
   });
-  if (!organization || !name || !email || password.length < 8)
+  if (!organization || !name || !email)
     throw new Error("Thông tin chưa hợp lệ");
-  const passwordHash = await bcrypt.hash(password, 12);
   await prisma.user.create({
     data: {
       name,
       email,
-      passwordHash,
       memberships: { create: { organizationId: organization.id, role } },
     },
   });
   revalidatePath("/dashboard/admin");
-}
-
-export async function resetCustomerPasswordAction(formData: FormData) {
-  const session = await requireSession();
-  if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");
-  const userId = String(formData.get("userId") || "");
-  const password = String(formData.get("password") || "");
-  if (password.length < 8) throw new Error("Mật khẩu phải có ít nhất 8 ký tự");
-  const user = await prisma.user.findFirst({
-    where: { id: userId, systemRole: "USER", memberships: { some: {} } },
-  });
-  if (!user) throw new Error("Không tìm thấy tài khoản khách hàng");
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: await bcrypt.hash(password, 12), enabled: true },
-  });
-  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard");
 }

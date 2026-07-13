@@ -1,10 +1,7 @@
 import { PrismaClient, SystemRole, OrganizationRole } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const email = process.env.ADMIN_EMAIL || "admin@thienphap.local";
-const password = process.env.ADMIN_PASSWORD || "ChangeMe123!";
-const passwordHash = await bcrypt.hash(password, 12);
+const email = process.env.ADMIN_EMAIL || "fchienvuhoang@gmail.com";
 
 const organization = await prisma.organization.upsert({
   where: { slug: "he-thong" },
@@ -14,8 +11,8 @@ const organization = await prisma.organization.upsert({
 
 const user = await prisma.user.upsert({
   where: { email },
-  update: { passwordHash, enabled: true },
-  create: { email, name: "Quản trị viên", passwordHash, systemRole: SystemRole.SUPER_ADMIN },
+  update: { enabled: true, systemRole: SystemRole.SUPER_ADMIN },
+  create: { email, name: "Quản trị viên", systemRole: SystemRole.SUPER_ADMIN },
 });
 
 await prisma.membership.upsert({

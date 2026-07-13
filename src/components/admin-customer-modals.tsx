@@ -92,16 +92,7 @@ export function CreateCustomerButton() {
               <label className="label">Email đăng nhập</label>
               <input className="input" type="email" name="email" required />
             </div>
-            <div className="sm:col-span-2">
-              <label className="label">Mật khẩu ban đầu</label>
-              <input
-                className="input"
-                type="password"
-                minLength={8}
-                name="password"
-                required
-              />
-            </div>
+            <p className="sm:col-span-2 text-sm text-[#718078]">Người quản trị đăng nhập bằng Gmail này qua Google SSO.</p>
           </div>
           <div className="flex justify-end gap-2">
             <button
@@ -181,16 +172,7 @@ export function EditCustomerButton({ customer }: { customer: Customer }) {
                   required
                 />
               </div>
-              <div className="sm:col-span-2">
-                <label className="label">Mật khẩu mới</label>
-                <input
-                  className="input"
-                  type="password"
-                  name="password"
-                  minLength={8}
-                  placeholder="Để trống nếu không đổi mật khẩu"
-                />
-              </div>
+              <p className="sm:col-span-2 text-sm text-[#718078]">Tài khoản sử dụng Google SSO, không có mật khẩu riêng trong hệ thống.</p>
             </div>
             <div className="flex justify-end">
               <button className="btn btn-primary">Lưu thông tin</button>

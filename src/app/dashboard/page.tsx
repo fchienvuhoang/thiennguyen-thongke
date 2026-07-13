@@ -6,9 +6,11 @@ import {
   Pencil,
   ReceiptText,
   TriangleAlert,
+  UserPlus,
 } from "lucide-react";
 import {
   classifyTransactionAction,
+  createCustomerUserAction,
   createDharmaAction,
   updateDharmaAction,
 } from "@/app/actions";
@@ -47,7 +49,7 @@ export default async function DashboardPage({
       ? { type: filters.type }
       : {}),
     ...(activeTab === "unmatched"
-      ? { classificationStatus: { in: ["UNMATCHED", "AMBIGUOUS"] } }
+      ? { dharmaId: null }
       : activeTab !== "all"
         ? { dharmaId: activeTab }
       : {}),
@@ -58,6 +60,7 @@ export default async function DashboardPage({
     organization,
     accounts,
     dharmas,
+    members,
     transactionCount,
     income,
     expense,
@@ -77,6 +80,11 @@ export default async function DashboardPage({
       include: { bankAccount: true },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.membership.findMany({
+      where: { organizationId },
+      include: { user: true },
+      orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+    }),
     prisma.transaction.count({ where: { organizationId } }),
     prisma.transaction.aggregate({
       where: { organizationId, type: "CREDIT" },
@@ -89,12 +97,16 @@ export default async function DashboardPage({
     prisma.transaction.count({
       where: {
         organizationId,
-        classificationStatus: { in: ["UNMATCHED", "AMBIGUOUS"] },
+        dharmaId: null,
       },
     }),
     prisma.transaction.findMany({
       where: transactionWhere,
-      include: { bankAccount: true, dharma: true },
+      include: {
+        bankAccount: true,
+        dharma: true,
+        classificationLogs: { orderBy: { createdAt: "desc" }, take: 3 },
+      },
       orderBy: { transactionTime: "desc" },
       skip: (currentPage - 1) * TRANSACTIONS_PER_PAGE,
       take: TRANSACTIONS_PER_PAGE,
@@ -452,6 +464,47 @@ export default async function DashboardPage({
             </tbody>
           </table>
         </div>
+
+        <div className="card mt-6">
+          <div className="p-5 border-b border-[#e3e9e5] flex items-center gap-3">
+            <UserPlus size={19} className="text-[#176b46]" />
+            <div>
+              <h3 className="font-semibold">Thành viên tổ chức</h3>
+              <p className="text-sm text-[#7a867e] mt-1">
+                Email được thêm tại đây có thể đăng nhập bằng tài khoản Gmail tương ứng; không yêu cầu domain riêng.
+              </p>
+            </div>
+          </div>
+          <div className="grid lg:grid-cols-[1fr_1fr]">
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Thành viên</th><th>Quyền</th><th>Đăng nhập Google</th></tr></thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.id}>
+                      <td><p className="font-medium">{member.user.name}</p><p className="text-xs text-[#7a867e] mt-1">{member.user.email}</p></td>
+                      <td><span className="badge badge-gray">{member.role === "ADMIN" ? "Quản trị" : "Thành viên"}</span></td>
+                      <td>{member.user.googleSubject ? <span className="badge badge-green">Đã liên kết</span> : <span className="badge badge-gray">Chưa đăng nhập</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {session.organizationRole === "ADMIN" && (
+              <form action={createCustomerUserAction} className="p-5 space-y-3 border-t lg:border-t-0 lg:border-l border-[#e3e9e5]">
+                <h4 className="font-semibold">Thêm tài khoản Google</h4>
+                <p className="text-sm text-[#7a867e]">Thêm trước địa chỉ Gmail của thành viên; tổ chức trong app không liên quan đến domain email.</p>
+                <input className="input" name="name" required placeholder="Tên thành viên" />
+                <input className="input" type="email" name="email" required placeholder="email@gmail.com" />
+                <select className="input" name="role" defaultValue="MEMBER">
+                  <option value="MEMBER">Thành viên</option>
+                  <option value="ADMIN">Quản trị tổ chức</option>
+                </select>
+                <button className="btn btn-primary w-full">Thêm thành viên</button>
+              </form>
+            )}
+          </div>
+        </div>
       </section>
 
       <section id="giao-dich" className="card scroll-mt-24">
@@ -585,10 +638,43 @@ export default async function DashboardPage({
                         </select>
                         <button className="btn btn-soft py-2">Gán</button>
                       </form>
-                      {transaction.manuallyClassified && (
-                        <span className="text-[11px] text-[#176b46]">
-                          Đã gán thủ công
-                        </span>
+                      <div className="mt-2">
+                        {transaction.manuallyClassified ? (
+                          <span className="badge badge-green">
+                            Thủ công · {transaction.classifiedByEmail || "Tài khoản cũ"}
+                          </span>
+                        ) : transaction.dharmaId ? (
+                          <span className="badge badge-gray">Hệ thống tự động gán</span>
+                        ) : (
+                          <span className="badge badge-amber">Hệ thống chưa nhận diện</span>
+                        )}
+                        {transaction.classifiedAt && (
+                          <span className="block text-[11px] text-[#7a867e] mt-1">
+                            {dateTime.format(transaction.classifiedAt)}
+                          </span>
+                        )}
+                      </div>
+                      {transaction.classificationLogs.length > 0 && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer text-[#176b46] font-medium">
+                            Lịch sử phân loại ({transaction.classificationLogs.length} gần nhất)
+                          </summary>
+                          <div className="mt-2 space-y-2 border-l-2 border-[#dfe6e1] pl-3">
+                            {transaction.classificationLogs.map((log) => (
+                              <div key={log.id}>
+                                <p className="font-medium">
+                                  {log.source === "MANUAL"
+                                    ? `Thủ công · ${log.actorEmail || "Không rõ tài khoản"}`
+                                    : "Hệ thống tự động"}
+                                </p>
+                                <p className="text-[#68756d]">
+                                  {log.previousDharmaName || "Chưa phân loại"} → {log.newDharmaName || "Chưa phân loại"}
+                                </p>
+                                <p className="text-[#8a948e]">{dateTime.format(log.createdAt)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
                       )}
                     </td>
                     <td

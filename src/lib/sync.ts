@@ -121,7 +121,12 @@ export async function syncAccount(
             where: {
               bankAccountId_externalId: { bankAccountId, externalId: item.id },
             },
-            select: { id: true },
+            select: {
+              id: true,
+              dharmaId: true,
+              manuallyClassified: true,
+              dharma: { select: { name: true } },
+            },
           });
           const rawData = JSON.parse(
             JSON.stringify(item),
@@ -139,7 +144,8 @@ export async function syncAccount(
               : matches.length > 1
                 ? ClassificationStatus.AMBIGUOUS
                 : ClassificationStatus.UNMATCHED;
-          await prisma.transaction.upsert({
+          const autoDharma = matches.length === 1 ? matches[0] : null;
+          const saved = await prisma.transaction.upsert({
             where: {
               bankAccountId_externalId: { bankAccountId, externalId: item.id },
             },
@@ -158,8 +164,9 @@ export async function syncAccount(
               normalizedNarrative: normalized,
               displayName: item.displayName,
               classificationStatus: status,
-              dharmaId: matches.length === 1 ? matches[0].id : null,
-              matchedCode: matches.length === 1 ? matches[0].code : null,
+              dharmaId: autoDharma?.id || null,
+              matchedCode: autoDharma?.code || null,
+              classifiedAt: new Date(),
               rawData,
             },
             update: {
@@ -168,15 +175,34 @@ export async function syncAccount(
               normalizedNarrative: normalized,
               displayName: item.displayName,
               rawData,
-              ...(matches.length === 1
+              ...(!existed?.manuallyClassified
                 ? {
                     classificationStatus: status,
-                    dharmaId: matches[0].id,
-                    matchedCode: matches[0].code,
+                    dharmaId: autoDharma?.id || null,
+                    matchedCode: autoDharma?.code || null,
+                    classifiedByEmail: null,
+                    classifiedAt: new Date(),
                   }
                 : {}),
             },
+            select: { id: true },
           });
+          if (
+            !existed?.manuallyClassified &&
+            (existed?.dharmaId || null) !== (autoDharma?.id || null)
+          ) {
+            await prisma.classificationLog.create({
+              data: {
+                organizationId: account.organizationId,
+                transactionId: saved.id,
+                source: "AUTO_SYNC",
+                previousDharmaId: existed?.dharmaId,
+                previousDharmaName: existed?.dharma?.name,
+                newDharmaId: autoDharma?.id,
+                newDharmaName: autoDharma?.name,
+              },
+            });
+          }
           if (existed) existing++;
           else inserted++;
         }
@@ -277,7 +303,12 @@ export async function reclassifyAccount(bankAccountId: string) {
         { dharmaId: { not: null } },
       ],
     },
-    select: { id: true, narrative: true },
+    select: {
+      id: true,
+      narrative: true,
+      dharmaId: true,
+      dharma: { select: { name: true } },
+    },
   });
 
   const groups = new Map<
@@ -289,6 +320,7 @@ export async function reclassifyAccount(bankAccountId: string) {
       classificationStatus: ClassificationStatus;
     }
   >();
+  const auditRows: Prisma.ClassificationLogCreateManyInput[] = [];
 
   for (const transaction of transactions) {
     const normalized = normalizeText(transaction.narrative);
@@ -315,6 +347,17 @@ export async function reclassifyAccount(bankAccountId: string) {
     };
     group.ids.push(transaction.id);
     groups.set(key, group);
+    if ((transaction.dharmaId || null) !== dharmaId) {
+      auditRows.push({
+        organizationId: account.organizationId,
+        transactionId: transaction.id,
+        source: "AUTO_RECLASSIFY",
+        previousDharmaId: transaction.dharmaId,
+        previousDharmaName: transaction.dharma?.name,
+        newDharmaId: dharmaId,
+        newDharmaName: matches.length === 1 ? matches[0].name : null,
+      });
+    }
   }
 
   const updates = [];
@@ -327,10 +370,15 @@ export async function reclassifyAccount(bankAccountId: string) {
             dharmaId: group.dharmaId,
             matchedCode: group.matchedCode,
             classificationStatus: group.classificationStatus,
+            classifiedByEmail: null,
+            classifiedAt: new Date(),
           },
         }),
       );
     }
+  }
+  if (auditRows.length) {
+    updates.push(prisma.classificationLog.createMany({ data: auditRows }));
   }
   if (updates.length) await prisma.$transaction(updates);
   return transactions.length;
