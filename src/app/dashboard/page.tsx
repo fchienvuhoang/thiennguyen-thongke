@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ArrowDownLeft,
@@ -18,6 +17,7 @@ import {
 import { DeleteDharmaForm } from "@/components/delete-dharma-form";
 import { OrganizationManagementModals } from "@/components/organization-management-modals";
 import { PageHeader } from "@/components/page-header";
+import { PendingLink } from "@/components/pending-link";
 import { PublicLink } from "@/components/public-link";
 import { SubmitButton } from "@/components/submit-button";
 import { requireSession } from "@/lib/auth";
@@ -581,7 +581,7 @@ export default async function DashboardPage({
             className="flex gap-2 overflow-x-auto mt-5 pb-1"
             aria-label="Phân loại giao dịch"
           >
-            <Link
+            <PendingLink
               href={transactionUrl("all")}
               className={`btn py-2 whitespace-nowrap ${activeTab === "all" ? "btn-primary" : "btn-soft"}`}
             >
@@ -589,8 +589,8 @@ export default async function DashboardPage({
               <span className="text-xs opacity-75">
                 {transactionCount.toLocaleString("vi-VN")}
               </span>
-            </Link>
-            <Link
+            </PendingLink>
+            <PendingLink
               href={transactionUrl("unmatched")}
               className={`btn py-2 whitespace-nowrap border border-[#efc56f] ${activeTab === "unmatched" ? "bg-[#d99a24] text-white" : "bg-[#fff1d7] text-[#8a590d]"}`}
             >
@@ -598,9 +598,9 @@ export default async function DashboardPage({
               <span className="text-xs opacity-80">
                 {unmatched.toLocaleString("vi-VN")}
               </span>
-            </Link>
+            </PendingLink>
             {dharmas.map((dharma) => (
-              <Link
+              <PendingLink
                 key={dharma.id}
                 href={transactionUrl(dharma.id)}
                 className={`btn py-2 whitespace-nowrap ${activeTab === dharma.id ? "btn-primary" : "btn-soft"}`}
@@ -609,7 +609,7 @@ export default async function DashboardPage({
                 <span className="text-xs opacity-75">
                   {dharma._count.transactions.toLocaleString("vi-VN")}
                 </span>
-              </Link>
+              </PendingLink>
             ))}
           </nav>
         </div>
@@ -733,12 +733,12 @@ export default async function DashboardPage({
         {totalPages > 1 && (
           <div className="p-4 border-t border-[#e3e9e5] flex items-center justify-between gap-3">
             {currentPage > 1 ? (
-              <Link
+              <PendingLink
                 className="btn btn-soft py-2"
                 href={transactionUrl(activeTab, currentPage - 1)}
               >
                 ← Trang trước
-              </Link>
+              </PendingLink>
             ) : (
               <span />
             )}
@@ -746,12 +746,12 @@ export default async function DashboardPage({
               Trang {currentPage} / {totalPages}
             </span>
             {currentPage < totalPages ? (
-              <Link
+              <PendingLink
                 className="btn btn-soft py-2"
                 href={transactionUrl(activeTab, currentPage + 1)}
               >
                 Trang sau →
-              </Link>
+              </PendingLink>
             ) : (
               <span />
             )}

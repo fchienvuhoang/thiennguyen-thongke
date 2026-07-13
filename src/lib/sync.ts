@@ -5,7 +5,11 @@ import {
   TransactionType,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { normalizeText, parseMbDateTime } from "@/lib/format";
+import {
+  normalizeClassificationText,
+  normalizeText,
+  parseMbDateTime,
+} from "@/lib/format";
 
 type ApiItem = {
   id: string;
@@ -132,10 +136,15 @@ export async function syncAccount(
             JSON.stringify(item),
           ) as Prisma.InputJsonValue;
           const normalized = normalizeText(item.narrative || "");
+          const normalizedForClassification = normalizeClassificationText(
+            item.narrative || "",
+          );
           const matches = account.dharmas.filter((dharma) =>
             [dharma.code, ...dharma.aliases].some((code) => {
-              const candidate = normalizeText(code);
-              return candidate && ` ${normalized} `.includes(` ${candidate} `);
+              const candidate = normalizeClassificationText(code);
+              return (
+                candidate && normalizedForClassification.includes(candidate)
+              );
             }),
           );
           const status =
@@ -323,11 +332,11 @@ export async function reclassifyAccount(bankAccountId: string) {
   const auditRows: Prisma.ClassificationLogCreateManyInput[] = [];
 
   for (const transaction of transactions) {
-    const normalized = normalizeText(transaction.narrative);
+    const normalized = normalizeClassificationText(transaction.narrative);
     const matches = account.dharmas.filter((dharma) =>
       [dharma.code, ...dharma.aliases].some((code) => {
-        const candidate = normalizeText(code);
-        return candidate && ` ${normalized} `.includes(` ${candidate} `);
+        const candidate = normalizeClassificationText(code);
+        return candidate && normalized.includes(candidate);
       }),
     );
     const classificationStatus =

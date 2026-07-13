@@ -22,6 +22,14 @@ export function normalizeText(value: string) {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Dạng chuẩn chỉ dùng khi đối chiếu từ khóa phân loại.
+ * Không phân biệt dấu, chữ hoa/thường, khoảng trắng hoặc dấu phân cách.
+ */
+export function normalizeClassificationText(value: string) {
+  return normalizeText(value).toLowerCase().replace(/\s+/g, "");
+}
+
 export function parseMbDateTime(value: string) {
   const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
   return new Date(hasTimeZone ? value : `${value}+07:00`);
