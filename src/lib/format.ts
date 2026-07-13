@@ -21,3 +21,14 @@ export function normalizeText(value: string) {
     .trim()
     .replace(/\s+/g, " ");
 }
+
+export function parseMbDateTime(value: string) {
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return new Date(hasTimeZone ? value : `${value}+07:00`);
+}
+
+export function toSlug(value: string) {
+  return (
+    normalizeText(value).toLowerCase().replace(/\s+/g, "-") || "thien-phap"
+  );
+}

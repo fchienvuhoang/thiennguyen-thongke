@@ -77,6 +77,7 @@ model BankAccount {
   accountNo      String        @unique
   name           String
   sourceUrl      String?
+  statementUrl   String?
   enabled        Boolean       @default(true)
   syncEnabled    Boolean       @default(true)
   lastSyncedAt   DateTime?
@@ -99,6 +100,7 @@ model Dharma {
   organizationId String
   bankAccountId  String
   name           String
+  publicSlug     String
   code           String
   aliases        String[]
   enabled        Boolean       @default(true)
@@ -108,6 +110,7 @@ model Dharma {
   transactions   Transaction[]
 
   @@unique([bankAccountId, code])
+  @@unique([organizationId, publicSlug])
   @@index([organizationId])
 }
 
