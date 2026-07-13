@@ -80,6 +80,7 @@ export default async function PublicOrganizationPage({
           transactionTime: true,
           narrative: true,
           displayName: true,
+          refId: true,
           bankAccount: { select: { accountNo: true } },
           dharma: { select: { name: true } },
         },
@@ -245,7 +246,7 @@ export default async function PublicOrganizationPage({
           <table>
             <thead>
               <tr>
-                <th>Thời gian</th>
+                <th>Thời gian / Mã GD</th>
                 <th>Nội dung</th>
                 <th>Thiện pháp</th>
                 <th className="text-right">Số tiền</th>
@@ -259,6 +260,11 @@ export default async function PublicOrganizationPage({
                     <p className="text-xs text-[#8a948e] mt-1">
                       TK {item.bankAccount.accountNo}
                     </p>
+                    {item.refId && (
+                      <p className="text-xs text-[#68756d] mt-1">
+                        Mã GD: <span className="font-mono font-medium">{item.refId}</span>
+                      </p>
+                    )}
                   </td>
                   <td>
                     <p className="break-words">{item.narrative}</p>

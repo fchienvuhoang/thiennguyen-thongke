@@ -60,3 +60,32 @@ export async function createDharma(
     select: { id: true, bankAccountId: true, name: true },
   });
 }
+
+export async function updateDharma(
+  session: Session,
+  input: { id: string; name: string; code: string; aliases: string },
+) {
+  if (session.systemRole === "SUPER_ADMIN")
+    throw new Error("Quản trị hệ thống không quản lý thiện pháp");
+  const existing = await prisma.dharma.findFirst({
+    where: { id: input.id, organizationId: session.organizationId },
+    select: { id: true, bankAccountId: true },
+  });
+  if (!existing) throw new Error("Không tìm thấy thiện pháp");
+
+  const name = input.name.trim();
+  const code = normalizeText(input.code);
+  const aliases = [...new Set(
+    input.aliases
+      .split(",")
+      .map(normalizeText)
+      .filter((alias) => alias && alias !== code),
+  )];
+  if (!name || !code) throw new Error("Tên và mã thiện pháp là bắt buộc");
+
+  return prisma.dharma.update({
+    where: { id: existing.id },
+    data: { name, code, aliases },
+    select: { id: true, bankAccountId: true, name: true },
+  });
+}

@@ -141,7 +141,7 @@ export default async function PublicDharmaPage({
               <p className="text-sm break-words mt-3">{item.narrative}</p>
               {item.refId && (
                 <p className="text-xs text-[#8a948e] break-all mt-2">
-                  {item.refId}
+                  Mã GD: <span className="font-mono font-medium">{item.refId}</span>
                 </p>
               )}
             </article>
@@ -162,7 +162,7 @@ export default async function PublicDharmaPage({
             </colgroup>
             <thead>
               <tr>
-                <th>Thời gian</th>
+                <th>Thời gian / Mã GD</th>
                 <th>Nội dung</th>
                 <th>Người giao dịch</th>
                 <th className="text-right">Số tiền</th>
@@ -173,7 +173,11 @@ export default async function PublicDharmaPage({
                 <tr key={item.id}>
                   <td>
                     {dateTime.format(item.transactionTime)}
-                    <p className="text-xs text-[#8a948e] mt-1">{item.refId}</p>
+                    {item.refId && (
+                      <p className="text-xs text-[#8a948e] mt-1">
+                        Mã GD: <span className="font-mono font-medium">{item.refId}</span>
+                      </p>
+                    )}
                   </td>
                   <td>
                     <p className="break-words">{item.narrative}</p>

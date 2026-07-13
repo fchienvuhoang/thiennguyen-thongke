@@ -49,6 +49,14 @@ type ApiResult = {
     byDharma: Record<string, number>;
   };
 };
+type ClassificationResult = {
+  id: string;
+  dharmaId: string | null;
+  manuallyClassified: boolean;
+  classifiedByEmail: string | null;
+  classifiedAt: string;
+  classificationLog: Transaction["classificationLogs"][number];
+};
 type Filters = {
   tab: string;
   type: "ALL" | "CREDIT" | "DEBIT";
@@ -93,7 +101,6 @@ export function TransactionsPanel({
   const [result, setResult] = useState<ApiResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const interacted = useRef(false);
 
@@ -129,7 +136,7 @@ export function TransactionsPanel({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [filters, revision]);
+  }, [filters]);
 
   function changeFilters(next: Partial<Filters>) {
     interacted.current = true;
@@ -160,10 +167,72 @@ export function TransactionsPanel({
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ dharmaId }),
       });
-      const payload = (await response.json()) as { success?: boolean; error?: string };
+      const payload = (await response.json()) as {
+        data?: ClassificationResult;
+        error?: string;
+      };
       if (!response.ok) throw new Error(payload.error || "Không thể phân loại giao dịch");
-      setLoading(true);
-      setRevision((value) => value + 1);
+      if (!payload.data) throw new Error("Phản hồi phân loại không hợp lệ");
+      const classified = payload.data;
+      setResult((current) => {
+        if (!current) return current;
+        const previous = current.data.find((item) => item.id === transactionId);
+        if (!previous) return current;
+        const previousDharmaId = previous.dharmaId;
+        const nextDharmaId = classified.dharmaId;
+        const counts = {
+          ...current.counts,
+          byDharma: { ...current.counts.byDharma },
+        };
+        if (previousDharmaId !== nextDharmaId) {
+          if (previousDharmaId) {
+            counts.byDharma[previousDharmaId] = Math.max(
+              0,
+              (counts.byDharma[previousDharmaId] || 0) - 1,
+            );
+          } else counts.unmatched = Math.max(0, counts.unmatched - 1);
+          if (nextDharmaId) {
+            counts.byDharma[nextDharmaId] =
+              (counts.byDharma[nextDharmaId] || 0) + 1;
+          } else counts.unmatched += 1;
+        }
+        const remainsInTab =
+          filters.tab === "all" ||
+          (filters.tab === "unmatched"
+            ? nextDharmaId === null
+            : filters.tab === nextDharmaId);
+        const updatedTransaction: Transaction = {
+          ...previous,
+          dharmaId: nextDharmaId,
+          manuallyClassified: classified.manuallyClassified,
+          classifiedByEmail: classified.classifiedByEmail,
+          classifiedAt: classified.classifiedAt,
+          classificationLogs: [
+            classified.classificationLog,
+            ...previous.classificationLogs,
+          ].slice(0, 3),
+        };
+        const data = remainsInTab
+          ? current.data.map((item) =>
+              item.id === transactionId ? updatedTransaction : item,
+            )
+          : current.data.filter((item) => item.id !== transactionId);
+        return {
+          ...current,
+          data,
+          counts,
+          meta: remainsInTab
+            ? current.meta
+            : {
+                ...current.meta,
+                total: Math.max(0, current.meta.total - 1),
+                totalPages: Math.max(
+                  1,
+                  Math.ceil(Math.max(0, current.meta.total - 1) / current.meta.pageSize),
+                ),
+              },
+        };
+      });
     } catch (classificationError) {
       setError(
         classificationError instanceof Error
@@ -272,7 +341,16 @@ export function TransactionsPanel({
                   </td>
                   <td className="max-w-xl">
                     <p className="line-clamp-2">{transaction.narrative}</p>
-                    <p className="text-xs text-[#8a948e] mt-1">{transaction.displayName || transaction.refId}</p>
+                    {transaction.displayName && (
+                      <p className="text-xs text-[#8a948e] mt-1">
+                        {transaction.displayName}
+                      </p>
+                    )}
+                    {transaction.refId && (
+                      <p className="text-xs text-[#68756d] mt-1">
+                        Mã GD: <span className="font-mono font-medium">{transaction.refId}</span>
+                      </p>
+                    )}
                   </td>
                   <td>
                     <form onSubmit={(event) => handleClassification(event, transaction.id)} className="flex gap-2 min-w-72">

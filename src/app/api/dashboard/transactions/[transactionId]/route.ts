@@ -18,9 +18,13 @@ export async function PATCH(
     const { transactionId } = await context.params;
     const body = (await request.json()) as { dharmaId?: unknown };
     const dharmaId = typeof body.dharmaId === "string" ? body.dharmaId : "";
-    await classifyTransaction(session, transactionId, dharmaId);
+    const transaction = await classifyTransaction(
+      session,
+      transactionId,
+      dharmaId,
+    );
     return Response.json(
-      { success: true },
+      { data: transaction },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );
   } catch (error) {

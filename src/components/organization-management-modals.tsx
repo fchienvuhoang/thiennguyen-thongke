@@ -3,6 +3,7 @@
 import { LoaderCircle, Plus, Users, X } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { createCustomerUserAction } from "@/app/actions";
+import { DharmaOperationProgress } from "@/components/dharma-operation-progress";
 import { SubmitButton } from "@/components/submit-button";
 
 type Props = {
@@ -69,6 +70,12 @@ export function OrganizationManagementModals({
     reclassifying: "Bước 2/3 · Đang quét và phân loại lại giao dịch...",
     refreshing: "Bước 3/3 · Đang cập nhật danh sách và số liệu...",
   }[dharmaProgress];
+  const progressStage = {
+    idle: "saving",
+    creating: "saving",
+    reclassifying: "reclassifying",
+    refreshing: "refreshing",
+  } as const;
 
   async function handleCreateDharma(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,11 +150,15 @@ export function OrganizationManagementModals({
           <input className="input" name="name" required disabled={dharmaBusy} placeholder="Tên thiện pháp" />
           <input className="input" name="code" required disabled={dharmaBusy} placeholder="Mã chính" />
           <input className="input" name="aliases" disabled={dharmaBusy} placeholder="Mã phụ, cách nhau dấu phẩy" />
-          {(dharmaBusy || dharmaError) && (
-            <div className={`sm:col-span-2 rounded-xl px-4 py-3 text-sm ${dharmaError ? "bg-red-50 text-red-700" : "bg-[#edf5f0] text-[#176b46]"}`} role="status">
-              {dharmaBusy && <LoaderCircle size={16} className="animate-spin inline mr-2" />}
-              {dharmaError || progressMessage}
-              {dharmaBusy && <p className="text-xs opacity-70 mt-1 ml-6">Vui lòng giữ cửa sổ này mở cho đến khi hoàn tất.</p>}
+          {dharmaBusy && (
+            <DharmaOperationProgress
+              stage={progressStage[dharmaProgress]}
+              savingLabel="Lưu thiện pháp mới vào cơ sở dữ liệu"
+            />
+          )}
+          {dharmaError && (
+            <div className="sm:col-span-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+              {dharmaError}
             </div>
           )}
           <button type="submit" disabled={dharmaBusy} className="btn btn-primary sm:col-span-2">

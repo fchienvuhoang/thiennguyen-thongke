@@ -13,6 +13,7 @@ import {
   updateDharmaAction,
 } from "@/app/actions";
 import { DeleteDharmaForm } from "@/components/delete-dharma-form";
+import { EditDharmaModal } from "@/components/edit-dharma-modal";
 import { OrganizationManagementModals } from "@/components/organization-management-modals";
 import { PageHeader } from "@/components/page-header";
 import { PublicLink } from "@/components/public-link";
@@ -233,19 +234,14 @@ export default async function DashboardPage({
                       />
                     </td>
                     <td>
-                      <details className="min-w-64">
-                        <summary className="list-none btn btn-soft py-1.5">
-                          <Pencil size={14} /> Sửa
-                        </summary>
-                        <form action={updateDharmaAction} className="space-y-2 mt-2">
-                          <input type="hidden" name="id" value={dharma.id} />
-                          <input className="input py-1.5" name="name" required defaultValue={dharma.name} />
-                          <input className="input py-1.5" name="code" required defaultValue={dharma.code} />
-                          <input className="input py-1.5" name="aliases" defaultValue={dharma.aliases.join(", ")} />
-                          <SubmitButton pendingText="Đang lưu..." className="btn btn-primary w-full py-1.5">Lưu thay đổi</SubmitButton>
-                        </form>
-                        <div className="flex justify-end mt-2"><DeleteDharmaForm id={dharma.id} name={dharma.name} /></div>
-                      </details>
+                      <EditDharmaModal
+                        dharma={{
+                          id: dharma.id,
+                          name: dharma.name,
+                          code: dharma.code,
+                          aliases: dharma.aliases,
+                        }}
+                      />
                     </td>
                   </tr>
                 );

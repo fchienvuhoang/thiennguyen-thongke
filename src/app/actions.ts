@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { clearSession, requireSession } from "@/lib/auth";
 import { classifyTransaction } from "@/lib/classify-transaction";
-import { normalizeText, toSlug } from "@/lib/format";
-import { createDharma } from "@/lib/manage-dharma";
+import { toSlug } from "@/lib/format";
+import { createDharma, updateDharma } from "@/lib/manage-dharma";
 import { reclassifyAccount } from "@/lib/sync";
 
 export async function logoutAction() {
@@ -137,21 +137,12 @@ export async function createDharmaAction(formData: FormData) {
 
 export async function updateDharmaAction(formData: FormData) {
   const session = await requireSession();
-  if (session.systemRole === "SUPER_ADMIN")
-    throw new Error("Quản trị hệ thống không quản lý thiện pháp");
-  const id = String(formData.get("id") || "");
-  const dharma = await prisma.dharma.findFirst({
-    where: { id, organizationId: session.organizationId },
+  const dharma = await updateDharma(session, {
+    id: String(formData.get("id") || ""),
+    name: String(formData.get("name") || ""),
+    code: String(formData.get("code") || ""),
+    aliases: String(formData.get("aliases") || ""),
   });
-  if (!dharma) throw new Error("Không tìm thấy thiện pháp");
-  const name = String(formData.get("name") || "").trim();
-  const code = normalizeText(String(formData.get("code") || ""));
-  const aliases = String(formData.get("aliases") || "")
-    .split(",")
-    .map(normalizeText)
-    .filter(Boolean);
-  if (!name || !code) throw new Error("Tên và mã thiện pháp là bắt buộc");
-  await prisma.dharma.update({ where: { id }, data: { name, code, aliases } });
   await reclassifyAccount(dharma.bankAccountId);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/dharmas");
