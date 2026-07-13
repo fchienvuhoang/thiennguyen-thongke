@@ -7,7 +7,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { PublicShell } from "@/components/public-shell";
+import { PublicTransactionTabs } from "@/components/public-transaction-tabs";
 import { dateTime, money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
@@ -16,12 +18,13 @@ type Props = {
   searchParams: Promise<{ type?: string }>;
 };
 
+const getPublicOrganization = cache((slug: string) =>
+  prisma.organization.findFirst({ where: { slug, enabled: true } }),
+);
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const organization = await prisma.organization.findFirst({
-    where: { slug, enabled: true },
-    select: { name: true },
-  });
+  const organization = await getPublicOrganization(slug);
   return {
     title: organization
       ? `Minh bạch — ${organization.name}`
@@ -34,22 +37,17 @@ export default async function PublicOrganizationPage({
   searchParams,
 }: Props) {
   const [{ slug }, filters] = await Promise.all([params, searchParams]);
-  const organization = await prisma.organization.findFirst({
-    where: { slug, enabled: true },
-  });
+  const organization = await getPublicOrganization(slug);
   if (!organization) notFound();
   const type =
     filters.type === "CREDIT" || filters.type === "DEBIT"
       ? filters.type
       : undefined;
-  const [income, expense, accounts, dharmas, grouped, transactions] =
+  const [totals, accounts, dharmas, grouped, transactions] =
     await Promise.all([
-      prisma.transaction.aggregate({
-        where: { organizationId: organization.id, type: "CREDIT" },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: { organizationId: organization.id, type: "DEBIT" },
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: { organizationId: organization.id },
         _sum: { amount: true },
       }),
       prisma.bankAccount.findMany({
@@ -73,13 +71,26 @@ export default async function PublicOrganizationPage({
       }),
       prisma.transaction.findMany({
         where: { organizationId: organization.id, ...(type ? { type } : {}) },
-        include: { bankAccount: true, dharma: true },
         orderBy: { transactionTime: "desc" },
-        take: 100,
+        take: 50,
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          transactionTime: true,
+          narrative: true,
+          displayName: true,
+          bankAccount: { select: { accountNo: true } },
+          dharma: { select: { name: true } },
+        },
       }),
     ]);
-  const incomeTotal = Number(income._sum.amount || 0);
-  const expenseTotal = Number(expense._sum.amount || 0);
+  const incomeTotal = Number(
+    totals.find((item) => item.type === "CREDIT")?._sum.amount || 0,
+  );
+  const expenseTotal = Number(
+    totals.find((item) => item.type === "DEBIT")?._sum.amount || 0,
+  );
   const groupedMap = new Map(
     grouped.map((row) => [
       row.dharmaId,
@@ -199,29 +210,10 @@ export default async function PublicOrganizationPage({
           <div>
             <h2 className="font-semibold text-lg">Sao kê gần nhất</h2>
             <p className="text-sm text-[#7a867e] mt-1">
-              Hiển thị tối đa 100 giao dịch.
+              Hiển thị 50 giao dịch gần nhất.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              className={`btn ${!type ? "btn-primary" : "btn-soft"}`}
-              href={`/minh-bach/${slug}`}
-            >
-              Tất cả
-            </Link>
-            <Link
-              className={`btn ${type === "CREDIT" ? "btn-primary" : "btn-soft"}`}
-              href={`?type=CREDIT`}
-            >
-              Thu
-            </Link>
-            <Link
-              className={`btn ${type === "DEBIT" ? "btn-primary" : "btn-soft"}`}
-              href={`?type=DEBIT`}
-            >
-              Chi
-            </Link>
-          </div>
+          <PublicTransactionTabs activeType={type} />
         </div>
         <div className="table-wrap">
           <table>

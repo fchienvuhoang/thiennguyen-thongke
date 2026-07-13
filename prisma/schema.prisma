@@ -141,6 +141,8 @@ model Transaction {
   @@unique([bankAccountId, refId])
   @@index([organizationId, transactionTime])
   @@index([dharmaId, transactionTime])
+  @@index([organizationId, type, transactionTime])
+  @@index([dharmaId, type, transactionTime])
   @@index([bankAccountId, transactionTime])
   @@index([organizationId, classificationStatus])
 }

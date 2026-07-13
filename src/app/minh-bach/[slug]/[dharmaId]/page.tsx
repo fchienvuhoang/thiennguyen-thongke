@@ -7,7 +7,9 @@ import {
   HandCoins,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { PublicShell } from "@/components/public-shell";
+import { PublicTransactionTabs } from "@/components/public-transaction-tabs";
 import { dateTime, money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
@@ -16,15 +18,20 @@ type Props = {
   searchParams: Promise<{ type?: string }>;
 };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug, dharmaId } = await params;
-  const dharma = await prisma.dharma.findFirst({
+const getPublicDharma = cache((slug: string, dharmaId: string) =>
+  prisma.dharma.findFirst({
     where: {
       OR: [{ publicSlug: dharmaId }, { id: dharmaId }],
+      enabled: true,
       organization: { slug, enabled: true },
     },
-    select: { name: true },
-  });
+    include: { organization: true, bankAccount: true },
+  }),
+);
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug, dharmaId } = await params;
+  const dharma = await getPublicDharma(slug, dharmaId);
   return {
     title: dharma ? `${dharma.name} — Minh bạch` : "Chi tiết thiện pháp",
   };
@@ -38,38 +45,38 @@ export default async function PublicDharmaPage({
     params,
     searchParams,
   ]);
-  const dharma = await prisma.dharma.findFirst({
-    where: {
-      OR: [{ publicSlug: dharmaId }, { id: dharmaId }],
-      enabled: true,
-      organization: { slug, enabled: true },
-    },
-    include: { organization: true, bankAccount: true },
-  });
+  const dharma = await getPublicDharma(slug, dharmaId);
   if (!dharma) notFound();
   const type =
     filters.type === "CREDIT" || filters.type === "DEBIT"
       ? filters.type
       : undefined;
-  const [income, expense, transactions] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { dharmaId: dharma.id, type: "CREDIT" },
-      _sum: { amount: true },
-      _count: true,
-    }),
-    prisma.transaction.aggregate({
-      where: { dharmaId: dharma.id, type: "DEBIT" },
+  const [grouped, transactions] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ["type"],
+      where: { dharmaId: dharma.id },
       _sum: { amount: true },
       _count: true,
     }),
     prisma.transaction.findMany({
       where: { dharmaId: dharma.id, ...(type ? { type } : {}) },
       orderBy: { transactionTime: "desc" },
-      take: 100,
+      take: 50,
+      select: {
+        id: true,
+        refId: true,
+        type: true,
+        amount: true,
+        transactionTime: true,
+        narrative: true,
+        displayName: true,
+      },
     }),
   ]);
-  const incomeTotal = Number(income._sum.amount || 0);
-  const expenseTotal = Number(expense._sum.amount || 0);
+  const income = grouped.find((item) => item.type === "CREDIT");
+  const expense = grouped.find((item) => item.type === "DEBIT");
+  const incomeTotal = Number(income?._sum.amount || 0);
+  const expenseTotal = Number(expense?._sum.amount || 0);
 
   return (
     <PublicShell
@@ -115,7 +122,7 @@ export default async function PublicDharmaPage({
             {money.format(incomeTotal)}
           </p>
           <p className="text-xs text-[#8a948e] mt-1">
-            {income._count} giao dịch
+            {income?._count || 0} giao dịch
           </p>
         </div>
         <div className="card p-5">
@@ -125,7 +132,7 @@ export default async function PublicDharmaPage({
             {money.format(expenseTotal)}
           </p>
           <p className="text-xs text-[#8a948e] mt-1">
-            {expense._count} giao dịch
+            {expense?._count || 0} giao dịch
           </p>
         </div>
         <div className="card p-5">
@@ -144,26 +151,7 @@ export default async function PublicDharmaPage({
               Các khoản đã được phân loại tự động hoặc thủ công.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              className={`btn ${!type ? "btn-primary" : "btn-soft"}`}
-              href={`/minh-bach/${slug}/${dharma.publicSlug}`}
-            >
-              Tất cả
-            </Link>
-            <Link
-              className={`btn ${type === "CREDIT" ? "btn-primary" : "btn-soft"}`}
-              href="?type=CREDIT"
-            >
-              Thu
-            </Link>
-            <Link
-              className={`btn ${type === "DEBIT" ? "btn-primary" : "btn-soft"}`}
-              href="?type=DEBIT"
-            >
-              Chi
-            </Link>
-          </div>
+          <PublicTransactionTabs activeType={type} />
         </div>
         <div className="table-wrap">
           <table>
