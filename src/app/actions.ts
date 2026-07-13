@@ -279,6 +279,50 @@ export async function createOrganizationUserAction(formData: FormData) {
   revalidatePath("/dashboard/admin");
 }
 
+export async function updateCustomerAction(formData: FormData) {
+  const session = await requireSession();
+  if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");
+  const organizationId = String(formData.get("organizationId") || "");
+  const userId = String(formData.get("userId") || "");
+  const organizationName = String(
+    formData.get("organizationName") || "",
+  ).trim();
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("password") || "");
+  const organization = await prisma.organization.findFirst({
+    where: {
+      id: organizationId,
+      memberships: { some: { userId } },
+    },
+    select: { id: true },
+  });
+  if (!organization || !organizationName || !name || !email)
+    throw new Error("Thông tin khách hàng chưa hợp lệ");
+  if (password && password.length < 8)
+    throw new Error("Mật khẩu phải có ít nhất 8 ký tự");
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: organization.id },
+      data: { name: organizationName },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        name,
+        email,
+        enabled: true,
+        ...(password
+          ? { passwordHash: await bcrypt.hash(password, 12) }
+          : {}),
+      },
+    }),
+  ]);
+  revalidatePath("/dashboard/admin");
+}
+
 export async function createCustomerUserAction(formData: FormData) {
   const session = await requireSession();
   if (session.systemRole !== "SUPER_ADMIN") throw new Error("Không có quyền");

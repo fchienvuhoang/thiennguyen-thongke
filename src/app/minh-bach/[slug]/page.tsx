@@ -125,23 +125,11 @@ export default async function PublicOrganizationPage({
           {organization.name}.
         </p>
         <div className="flex flex-wrap gap-2 mt-4">
-          {accounts.map((account) =>
-            account.statementUrl ? (
-              <a
-                key={account.id}
-                href={account.statementUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="badge badge-gray hover:bg-[#dfe8e2]"
-              >
-                TK {account.accountNo} · {account.name} · Xem sao kê gốc ↗
-              </a>
-            ) : (
-              <span key={account.id} className="badge badge-gray">
-                TK {account.accountNo} · {account.name}
-              </span>
-            ),
-          )}
+          {accounts.map((account) => (
+            <span key={account.id} className="badge badge-gray">
+              TK {account.accountNo} · {account.name}
+            </span>
+          ))}
         </div>
       </section>
       <section className="grid sm:grid-cols-3 gap-4 mb-8">

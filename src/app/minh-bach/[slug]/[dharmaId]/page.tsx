@@ -44,20 +44,30 @@ export default async function PublicDharmaPage({
     filters.type === "CREDIT" || filters.type === "DEBIT"
       ? filters.type
       : undefined;
-  const transactions = await prisma.transaction.findMany({
-    where: { dharmaId: dharma.id, ...(type ? { type } : {}) },
-    orderBy: { transactionTime: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      refId: true,
-      type: true,
-      amount: true,
-      transactionTime: true,
-      narrative: true,
-      displayName: true,
-    },
-  });
+  const [totals, transactions] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ["type"],
+      where: { dharmaId: dharma.id },
+      _sum: { amount: true },
+      _count: true,
+    }),
+    prisma.transaction.findMany({
+      where: { dharmaId: dharma.id, ...(type ? { type } : {}) },
+      orderBy: { transactionTime: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        refId: true,
+        type: true,
+        amount: true,
+        transactionTime: true,
+        narrative: true,
+        displayName: true,
+      },
+    }),
+  ]);
+  const income = totals.find((item) => item.type === "CREDIT");
+  const expense = totals.find((item) => item.type === "DEBIT");
 
   return (
     <PublicShell
@@ -78,16 +88,26 @@ export default async function PublicDharmaPage({
           Tài khoản tiếp nhận: {dharma.bankAccount.name} ·{" "}
           {dharma.bankAccount.accountNo}
         </p>
-        {dharma.bankAccount.statementUrl && (
-          <a
-            href={dharma.bankAccount.statementUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex mt-2 text-sm font-medium text-[#176b46] hover:underline"
-          >
-            Xem sao kê gốc trên Thiện Nguyện ↗
-          </a>
-        )}
+        <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4 pt-4 border-t border-[#dfe6e1]">
+          <div>
+            <p className="text-xs text-[#718078]">Tổng thu</p>
+            <p className="text-lg font-semibold text-[#176b46] mt-0.5">
+              {money.format(Number(income?._sum.amount || 0))}
+            </p>
+            <p className="text-xs text-[#8a948e]">
+              {income?._count || 0} giao dịch
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[#718078]">Tổng chi</p>
+            <p className="text-lg font-semibold text-red-700 mt-0.5">
+              {money.format(Number(expense?._sum.amount || 0))}
+            </p>
+            <p className="text-xs text-[#8a948e]">
+              {expense?._count || 0} giao dịch
+            </p>
+          </div>
+        </div>
       </section>
       <section className="card">
         <div className="p-5 border-b border-[#e3e9e5] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
