@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { CopyTransactionsButton } from "@/components/copy-transactions-button";
 import { PublicShell } from "@/components/public-shell";
 import { PublicTransactionTabs } from "@/components/public-transaction-tabs";
 import { dateTime, money } from "@/lib/format";
@@ -117,7 +118,17 @@ export default async function PublicDharmaPage({
               Các khoản đã được phân loại tự động hoặc thủ công.
             </p>
           </div>
-          <PublicTransactionTabs activeType={type} />
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyTransactionsButton
+              transactions={transactions.map((item) => ({
+                transactionTime: item.transactionTime.toISOString(),
+                displayName: item.displayName,
+                narrative: item.narrative,
+                amount: Number(item.amount),
+              }))}
+            />
+            <PublicTransactionTabs activeType={type} />
+          </div>
         </div>
         <div className="divide-y divide-[#edf1ee] sm:hidden">
           {transactions.map((item) => (

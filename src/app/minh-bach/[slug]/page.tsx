@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { CopyTransactionsButton } from "@/components/copy-transactions-button";
 import { PublicShell } from "@/components/public-shell";
 import { PublicTransactionTabs } from "@/components/public-transaction-tabs";
 import { dateTime, money } from "@/lib/format";
@@ -240,7 +241,17 @@ export default async function PublicOrganizationPage({
               Hiển thị 50 giao dịch gần nhất.
             </p>
           </div>
-          <PublicTransactionTabs activeType={type} />
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyTransactionsButton
+              transactions={transactions.map((item) => ({
+                transactionTime: item.transactionTime.toISOString(),
+                displayName: item.displayName,
+                narrative: item.narrative,
+                amount: Number(item.amount),
+              }))}
+            />
+            <PublicTransactionTabs activeType={type} />
+          </div>
         </div>
         <div className="table-wrap">
           <table>
