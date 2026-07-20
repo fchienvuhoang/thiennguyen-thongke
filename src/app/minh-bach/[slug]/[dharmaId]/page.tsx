@@ -176,7 +176,7 @@ export default async function PublicDharmaPage({
             <thead>
               <tr>
                 <th>Thời gian / Mã GD</th>
-                <th>Nội dung</th>
+                <th>Nội dung chuyển khoản</th>
                 <th>Người giao dịch</th>
                 <th className="text-right">Số tiền</th>
               </tr>

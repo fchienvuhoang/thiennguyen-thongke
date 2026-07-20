@@ -390,7 +390,7 @@ export function TransactionsPanel({
       )}
       <div className={`table-wrap transition-opacity ${loading && result ? "opacity-55" : "opacity-100"}`} aria-busy={loading}>
         <table>
-          <thead><tr><th>Thời gian / Loại</th><th>Nội dung</th><th>Thiện pháp / Phân loại thủ công</th><th className="text-right">Số tiền</th></tr></thead>
+          <thead><tr><th>Thời gian / Loại</th><th>Nội dung chuyển khoản</th><th>Thiện pháp / Phân loại thủ công</th><th className="text-right">Số tiền</th></tr></thead>
           <tbody>
             {loading && !result ? (
               <tr><td colSpan={4} className="text-center py-12 text-[#7a867e]"><LoaderCircle className="animate-spin inline mr-2" size={18} />Đang tải giao dịch...</td></tr>

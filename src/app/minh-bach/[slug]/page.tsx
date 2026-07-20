@@ -261,7 +261,7 @@ export default async function PublicOrganizationPage({
             <thead>
               <tr>
                 <th>Thời gian / Mã GD</th>
-                <th>Nội dung</th>
+                <th>Nội dung chuyển khoản</th>
                 <th>Thiện pháp</th>
                 <th className="text-right">Số tiền</th>
               </tr>
