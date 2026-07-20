@@ -170,7 +170,9 @@ export default async function PublicOrganizationPage({
                   {money.format(Number(item.amount))}
                 </p>
               </div>
-              <p className="text-sm break-words mt-3">{item.narrative}</p>
+              <p className="text-sm whitespace-pre-wrap break-words mt-3">
+                {item.narrative}
+              </p>
               <p className="text-xs text-[#176b46] mt-2">
                 {item.dharma?.name || "Chưa phân loại"}
               </p>
@@ -281,7 +283,9 @@ export default async function PublicOrganizationPage({
                     )}
                   </td>
                   <td>
-                    <p className="break-words">{item.narrative}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      {item.narrative}
+                    </p>
                     <p className="text-xs text-[#8a948e] mt-1">
                       {item.displayName}
                     </p>

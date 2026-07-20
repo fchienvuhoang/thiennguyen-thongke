@@ -151,7 +151,9 @@ export default async function PublicDharmaPage({
                   {money.format(Number(item.amount))}
                 </p>
               </div>
-              <p className="text-sm break-words mt-3">{item.narrative}</p>
+              <p className="text-sm whitespace-pre-wrap break-words mt-3">
+                {item.narrative}
+              </p>
               {item.refId && (
                 <p className="text-xs text-[#8a948e] break-all mt-2">
                   Mã GD: <span className="font-mono font-medium">{item.refId}</span>
@@ -193,7 +195,9 @@ export default async function PublicDharmaPage({
                     )}
                   </td>
                   <td>
-                    <p className="break-words">{item.narrative}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      {item.narrative}
+                    </p>
                   </td>
                   <td className="break-words">
                     {item.displayName || "Không xác định"}

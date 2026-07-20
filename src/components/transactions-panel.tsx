@@ -404,7 +404,9 @@ export function TransactionsPanel({
                     <span className="text-xs text-[#7a867e] ml-2">TK {transaction.bankAccount.accountNo}</span>
                   </td>
                   <td className="max-w-xl">
-                    <p className="line-clamp-2">{transaction.narrative}</p>
+                    <p className="whitespace-pre-wrap break-words">
+                      {transaction.narrative}
+                    </p>
                     {transaction.displayName && (
                       <p className="text-xs text-[#8a948e] mt-1">
                         {transaction.displayName}
