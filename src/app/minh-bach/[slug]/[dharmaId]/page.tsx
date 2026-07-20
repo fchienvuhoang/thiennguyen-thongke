@@ -69,6 +69,8 @@ export default async function PublicDharmaPage({
   ]);
   const income = totals.find((item) => item.type === "CREDIT");
   const expense = totals.find((item) => item.type === "DEBIT");
+  // Keep selecting the latest 50 records, then display them chronologically.
+  const chronologicalTransactions = [...transactions].reverse();
 
   return (
     <PublicShell
@@ -120,7 +122,7 @@ export default async function PublicDharmaPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <CopyTransactionsButton
-              transactions={transactions.map((item) => ({
+              transactions={chronologicalTransactions.map((item) => ({
                 transactionTime: item.transactionTime.toISOString(),
                 displayName: item.displayName,
                 narrative: item.narrative,
@@ -131,7 +133,7 @@ export default async function PublicDharmaPage({
           </div>
         </div>
         <div className="divide-y divide-[#edf1ee] sm:hidden">
-          {transactions.map((item) => (
+          {chronologicalTransactions.map((item) => (
             <article key={item.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -157,7 +159,7 @@ export default async function PublicDharmaPage({
               )}
             </article>
           ))}
-          {!transactions.length && (
+          {!chronologicalTransactions.length && (
             <p className="text-center py-12 text-sm text-[#7a867e]">
               Chưa có giao dịch.
             </p>
@@ -180,7 +182,7 @@ export default async function PublicDharmaPage({
               </tr>
             </thead>
             <tbody>
-              {transactions.map((item) => (
+              {chronologicalTransactions.map((item) => (
                 <tr key={item.id}>
                   <td>
                     {dateTime.format(item.transactionTime)}
@@ -204,7 +206,7 @@ export default async function PublicDharmaPage({
                   </td>
                 </tr>
               ))}
-              {!transactions.length && (
+              {!chronologicalTransactions.length && (
                 <tr>
                   <td colSpan={4} className="text-center py-12 text-[#7a867e]">
                     Chưa có giao dịch.

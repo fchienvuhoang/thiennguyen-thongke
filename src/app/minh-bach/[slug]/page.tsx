@@ -93,6 +93,9 @@ export default async function PublicOrganizationPage({
   const expenseTotal = Number(
     totals.find((item) => item.type === "DEBIT")?._sum.amount || 0,
   );
+  // The query selects the latest 50 records. Reverse that result so both the
+  // web view and copied rows run from the oldest timestamp to the newest.
+  const chronologicalTransactions = [...transactions].reverse();
   const groupedMap = new Map(
     grouped.map((row) => [
       row.dharmaId,
@@ -148,7 +151,7 @@ export default async function PublicOrganizationPage({
           <h2 className="text-xl font-semibold">Các thiện pháp</h2>
         </div>
         <div className="divide-y divide-[#edf1ee] sm:hidden">
-          {transactions.map((item) => (
+          {chronologicalTransactions.map((item) => (
             <article key={item.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -173,7 +176,7 @@ export default async function PublicOrganizationPage({
               </p>
             </article>
           ))}
-          {!transactions.length && (
+          {!chronologicalTransactions.length && (
             <p className="text-center py-12 text-sm text-[#7a867e]">
               Chưa có giao dịch.
             </p>
@@ -238,12 +241,12 @@ export default async function PublicOrganizationPage({
           <div>
             <h2 className="font-semibold text-lg">Sao kê gần nhất</h2>
             <p className="text-sm text-[#7a867e] mt-1">
-              Hiển thị 50 giao dịch gần nhất.
+              Hiển thị 50 giao dịch gần nhất theo thời gian tăng dần.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <CopyTransactionsButton
-              transactions={transactions.map((item) => ({
+              transactions={chronologicalTransactions.map((item) => ({
                 transactionTime: item.transactionTime.toISOString(),
                 displayName: item.displayName,
                 narrative: item.narrative,
@@ -264,7 +267,7 @@ export default async function PublicOrganizationPage({
               </tr>
             </thead>
             <tbody>
-              {transactions.map((item) => (
+              {chronologicalTransactions.map((item) => (
                 <tr key={item.id}>
                   <td>
                     {dateTime.format(item.transactionTime)}

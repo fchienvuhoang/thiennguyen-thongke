@@ -45,7 +45,12 @@ export function CopyTransactionsButton({
   }, [copied]);
 
   async function copyForExcel() {
-    const text = transactions
+    const chronologicalTransactions = [...transactions].sort(
+      (first, second) =>
+        new Date(first.transactionTime).getTime() -
+        new Date(second.transactionTime).getTime(),
+    );
+    const text = chronologicalTransactions
       .map((item, index) =>
         [
           index + 1,

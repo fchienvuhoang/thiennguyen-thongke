@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { dateTime, money } from "@/lib/format";
 
-type Account = { id: string; accountNo: string };
+type Account = { id: string; accountNo: string; name: string };
 type Dharma = {
   id: string;
   name: string;
@@ -83,10 +83,20 @@ export function TransactionsPanel({
   initialFilters: Partial<Filters>;
   initialCounts: { all: number; unmatched: number };
 }) {
+  const initialDharma = dharmas.find(
+    (dharma) => dharma.id === initialFilters.tab,
+  );
+  const validInitialAccount = accounts.some(
+    (account) => account.id === initialFilters.account,
+  )
+    ? initialFilters.account || ""
+    : initialDharma?.bankAccountId || accounts[0]?.id || "";
   const validInitialTab =
     initialFilters.tab === "unmatched" ||
     initialFilters.tab === "all" ||
-    dharmas.some((dharma) => dharma.id === initialFilters.tab)
+    (initialDharma &&
+      (!validInitialAccount ||
+        initialDharma.bankAccountId === validInitialAccount))
       ? initialFilters.tab || "all"
       : "all";
   const [filters, setFilters] = useState<Filters>({
@@ -95,7 +105,7 @@ export function TransactionsPanel({
       initialFilters.type === "CREDIT" || initialFilters.type === "DEBIT"
         ? initialFilters.type
         : "ALL",
-    account: initialFilters.account || "",
+    account: validInitialAccount,
     page: Math.max(1, initialFilters.page || 1),
   });
   const [result, setResult] = useState<ApiResult | null>(null);
@@ -149,8 +159,11 @@ export function TransactionsPanel({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const type = String(formData.get("type") || "ALL") as Filters["type"];
-    const account = String(formData.get("account") || "");
-    changeFilters({ type, account, page: 1 });
+    changeFilters({ type, page: 1 });
+  }
+
+  function selectAccount(accountId: string) {
+    changeFilters({ account: accountId, tab: "all", page: 1 });
   }
 
   async function handleClassification(
@@ -259,6 +272,14 @@ export function TransactionsPanel({
     total: 0,
     totalPages: 1,
   };
+  const selectedAccount = accounts.find(
+    (account) => account.id === filters.account,
+  );
+  const visibleDharmas = selectedAccount
+    ? dharmas.filter(
+        (dharma) => dharma.bankAccountId === selectedAccount.id,
+      )
+    : dharmas;
 
   return (
     <section id="giao-dich" className="card scroll-mt-24">
@@ -278,17 +299,54 @@ export function TransactionsPanel({
               <option value="CREDIT">Khoản thu</option>
               <option value="DEBIT">Khoản chi</option>
             </select>
-            <select className="input w-auto" name="account" defaultValue={filters.account}>
-              <option value="">Mọi tài khoản</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>{account.accountNo}</option>
-              ))}
-            </select>
             <button className="btn btn-primary" disabled={loading}>
               {loading ? <><LoaderCircle size={15} className="animate-spin" /> Đang tải...</> : "Lọc"}
             </button>
           </form>
         </div>
+        {accounts.length > 0 && (
+          <div className="mt-5 rounded-xl border border-[#dfe7e2] bg-[#f7faf8] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#68756d]">
+              Tài khoản nguồn đang xem
+            </p>
+            {accounts.length > 1 ? (
+              <div
+                className="flex gap-2 overflow-x-auto mt-2 pb-0.5"
+                role="tablist"
+                aria-label="Tài khoản nguồn"
+              >
+                {accounts.map((account) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={filters.account === account.id}
+                    disabled={loading}
+                    key={account.id}
+                    onClick={() => selectAccount(account.id)}
+                    className={`btn py-2.5 whitespace-nowrap border ${
+                      filters.account === account.id
+                        ? "btn-primary border-[#176b46]"
+                        : "bg-white text-[#33483c] border-[#d8e0da]"
+                    }`}
+                  >
+                    {loading && filters.account === account.id && (
+                      <LoaderCircle size={15} className="animate-spin" />
+                    )}
+                    <span>{account.name}</span>
+                    <span className="text-xs opacity-75">TK {account.accountNo}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 font-medium text-[#244b37]">
+                {selectedAccount?.name}{" "}
+                <span className="text-sm font-normal text-[#68756d]">
+                  · TK {selectedAccount?.accountNo}
+                </span>
+              </p>
+            )}
+          </div>
+        )}
         <nav className="flex gap-2 overflow-x-auto mt-5 pb-1" aria-label="Phân loại giao dịch">
           <button
             type="button"
@@ -308,7 +366,7 @@ export function TransactionsPanel({
             {loading && filters.tab === "unmatched" ? <LoaderCircle size={15} className="animate-spin" /> : <TriangleAlert size={15} />}
             Chưa phân loại <span className="text-xs opacity-80">{counts.unmatched.toLocaleString("vi-VN")}</span>
           </button>
-          {dharmas.map((dharma) => (
+          {visibleDharmas.map((dharma) => (
             <button
               type="button"
               disabled={loading}
@@ -324,6 +382,12 @@ export function TransactionsPanel({
         </nav>
         {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
       </div>
+      {selectedAccount && (
+        <div className="px-4 py-2.5 bg-[#edf5f0] border-b border-[#dce7e0] text-sm text-[#315843]">
+          Chỉ hiển thị giao dịch từ <strong>{selectedAccount.name}</strong>
+          {" · "}TK {selectedAccount.accountNo}
+        </div>
+      )}
       <div className={`table-wrap transition-opacity ${loading && result ? "opacity-55" : "opacity-100"}`} aria-busy={loading}>
         <table>
           <thead><tr><th>Thời gian / Loại</th><th>Nội dung</th><th>Thiện pháp / Phân loại thủ công</th><th className="text-right">Số tiền</th></tr></thead>

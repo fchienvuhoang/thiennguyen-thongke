@@ -68,7 +68,7 @@ export default async function DashboardPage({
       orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
     }),
     prisma.transaction.groupBy({
-      by: ["type", "dharmaId"],
+      by: ["type", "dharmaId", "bankAccountId"],
       where: { organizationId },
       _sum: { amount: true },
       _count: true,
@@ -85,6 +85,26 @@ export default async function DashboardPage({
     .filter((row) => row.type === "DEBIT")
     .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0);
   const unmatched = transactionStats
+    .filter((row) => row.dharmaId === null)
+    .reduce((sum, row) => sum + row._count, 0);
+  const requestedDharma = dharmas.find(
+    (dharma) => dharma.id === filters.tab,
+  );
+  const initialAccountId = accounts.some(
+    (account) => account.id === filters.account,
+  )
+    ? filters.account || ""
+    : requestedDharma?.bankAccountId || accounts[0]?.id || "";
+  const initialAccountStats = initialAccountId
+    ? transactionStats.filter(
+        (row) => row.bankAccountId === initialAccountId,
+      )
+    : transactionStats;
+  const initialAccountCount = initialAccountStats.reduce(
+    (sum, row) => sum + row._count,
+    0,
+  );
+  const initialAccountUnmatched = initialAccountStats
     .filter((row) => row.dharmaId === null)
     .reduce((sum, row) => sum + row._count, 0);
   const incomeMap = new Map(
@@ -481,6 +501,7 @@ export default async function DashboardPage({
         accounts={accounts.map((account) => ({
           id: account.id,
           accountNo: account.accountNo,
+          name: account.name,
         }))}
         dharmas={dharmas.map((dharma) => ({
           id: dharma.id,
@@ -496,13 +517,16 @@ export default async function DashboardPage({
             filters.type === "CREDIT" || filters.type === "DEBIT"
               ? filters.type
               : "ALL",
-          account: filters.account || "",
+          account: initialAccountId,
           page: Math.max(
             1,
             Number.parseInt(filters.page || "1", 10) || 1,
           ),
         }}
-        initialCounts={{ all: transactionCount, unmatched }}
+        initialCounts={{
+          all: initialAccountCount,
+          unmatched: initialAccountUnmatched,
+        }}
       />
       <p className="text-center text-xs text-[#8a948e] mt-6">
         {transactionCount.toLocaleString("vi-VN")} giao dịch đã lưu trong hệ

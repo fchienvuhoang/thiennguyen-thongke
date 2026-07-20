@@ -32,10 +32,24 @@ export async function GET(request: NextRequest) {
   );
   const organizationId = session.organizationId;
 
+  if (account) {
+    const validAccount = await prisma.bankAccount.findFirst({
+      where: { id: account, organizationId },
+      select: { id: true },
+    });
+    if (!validAccount)
+      return json({ error: "Tài khoản nguồn không hợp lệ" }, { status: 400 });
+  }
+
   let tab = requestedTab;
   if (tab !== "all" && tab !== "unmatched") {
     const validDharma = await prisma.dharma.findFirst({
-      where: { id: tab, organizationId, enabled: true },
+      where: {
+        id: tab,
+        organizationId,
+        enabled: true,
+        ...(account ? { bankAccountId: account } : {}),
+      },
       select: { id: true },
     });
     if (!validDharma) tab = "all";
@@ -89,7 +103,10 @@ export async function GET(request: NextRequest) {
     prisma.transaction.count({ where }),
     prisma.transaction.groupBy({
       by: ["dharmaId"],
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(account ? { bankAccountId: account } : {}),
+      },
       _count: true,
     }),
   ]);
