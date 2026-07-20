@@ -206,75 +206,129 @@ export default async function DashboardPage({
             Tổng hợp từ các giao dịch CREDIT đã được phân loại.
           </p>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Thiện pháp</th>
-                <th>Tài khoản</th>
-                <th>Mã chính</th>
-                <th>Mã phụ</th>
-                <th>Giao dịch</th>
-                <th className="text-right">Tổng thu</th>
-                <th>Link công khai</th>
-                <th>Quản lý</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dharmas.map((dharma) => {
+        <div className="divide-y divide-[#dce6e0]">
+          {accounts.map((account) => {
+            const accountDharmas = dharmas.filter(
+              (dharma) => dharma.bankAccountId === account.id,
+            );
+            const accountStats = accountDharmas.reduce(
+              (total, dharma) => {
                 const stats = incomeMap.get(dharma.id);
-                return (
-                  <tr key={dharma.id}>
-                    <td className="font-medium">{dharma.name}</td>
-                    <td>{dharma.bankAccount.accountNo}</td>
-                    <td>
-                      <span className="badge badge-green">{dharma.code}</span>
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        {dharma.aliases.length ? (
-                          dharma.aliases.map((alias) => (
-                            <span key={alias} className="badge badge-gray">
-                              {alias}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-[#9aa39d]">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>{stats?.count || 0}</td>
-                    <td className="text-right font-semibold text-[#176b46] whitespace-nowrap">
-                      {money.format(stats?.amount || 0)}
-                    </td>
-                    <td>
-                      <PublicLink
-                        compact
-                        href={`/minh-bach/${organization.slug}/${dharma.publicSlug}`}
-                      />
-                    </td>
-                    <td>
-                      <EditDharmaModal
-                        dharma={{
-                          id: dharma.id,
-                          name: dharma.name,
-                          code: dharma.code,
-                          aliases: dharma.aliases,
-                        }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-              {!dharmas.length && (
-                <tr>
-                  <td colSpan={8} className="text-center py-10 text-[#7a867e]">
-                    Chưa có thiện pháp.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                return {
+                  count: total.count + (stats?.count || 0),
+                  amount: total.amount + (stats?.amount || 0),
+                };
+              },
+              { count: 0, amount: 0 },
+            );
+
+            return (
+              <div key={account.id}>
+                <div className="px-4 py-3 bg-[#f7faf8] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-[#244b37]">
+                      {account.name}
+                    </p>
+                    <p className="text-sm text-[#68756d] mt-0.5">
+                      Tài khoản {account.accountNo} · {accountDharmas.length}{" "}
+                      thiện pháp
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="badge badge-gray">
+                      {accountStats.count.toLocaleString("vi-VN")} giao dịch thu
+                    </span>
+                    <span className="badge badge-green">
+                      Tổng thu {money.format(accountStats.amount)}
+                    </span>
+                  </div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Thiện pháp</th>
+                        <th>Mã chính</th>
+                        <th>Mã phụ</th>
+                        <th>Giao dịch</th>
+                        <th className="text-right">Tổng thu</th>
+                        <th>Link công khai</th>
+                        <th>Quản lý</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accountDharmas.map((dharma) => {
+                        const stats = incomeMap.get(dharma.id);
+                        return (
+                          <tr key={dharma.id}>
+                            <td className="font-medium">{dharma.name}</td>
+                            <td>
+                              <span className="badge badge-green">
+                                {dharma.code}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="flex flex-wrap gap-1">
+                                {dharma.aliases.length ? (
+                                  dharma.aliases.map((alias) => (
+                                    <span
+                                      key={alias}
+                                      className="badge badge-gray"
+                                    >
+                                      {alias}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-[#9aa39d]">
+                                    —
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>{stats?.count || 0}</td>
+                            <td className="text-right font-semibold text-[#176b46] whitespace-nowrap">
+                              {money.format(stats?.amount || 0)}
+                            </td>
+                            <td>
+                              <PublicLink
+                                compact
+                                href={`/minh-bach/${organization.slug}/${dharma.publicSlug}`}
+                              />
+                            </td>
+                            <td>
+                              <EditDharmaModal
+                                dharma={{
+                                  id: dharma.id,
+                                  name: dharma.name,
+                                  code: dharma.code,
+                                  aliases: dharma.aliases,
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!accountDharmas.length && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="text-center py-8 text-[#7a867e]"
+                          >
+                            Chưa có thiện pháp cho tài khoản này.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+          {!accounts.length && (
+            <p className="text-center py-10 text-sm text-[#7a867e]">
+              Chưa có tài khoản nguồn.
+            </p>
+          )}
         </div>
       </section>
 
