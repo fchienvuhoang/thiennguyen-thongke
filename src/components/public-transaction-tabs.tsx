@@ -2,7 +2,7 @@
 
 import { LoaderCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react";
+import { useCallback, useEffect, useTransition } from "react";
 
 type TransactionType = "CREDIT" | "DEBIT";
 
@@ -14,22 +14,33 @@ const tabs: { label: string; type?: TransactionType }[] = [
 
 export function PublicTransactionTabs({
   activeType,
+  fromDate,
+  toDate,
 }: {
   activeType?: TransactionType;
+  fromDate?: string;
+  toDate?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function href(type?: TransactionType) {
-    return type ? `${pathname}?type=${type}` : pathname;
-  }
+  const href = useCallback((type?: TransactionType) => {
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    if (fromDate && toDate) {
+      params.set("from", fromDate);
+      params.set("to", toDate);
+    }
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [fromDate, pathname, toDate]);
 
   useEffect(() => {
     for (const tab of tabs) {
-      router.prefetch(tab.type ? `${pathname}?type=${tab.type}` : pathname);
+      router.prefetch(href(tab.type));
     }
-  }, [pathname, router]);
+  }, [href, router]);
 
   return (
     <div className="flex items-center gap-2" aria-busy={isPending}>

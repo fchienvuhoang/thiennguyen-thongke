@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { CopyTransactionsButton } from "@/components/copy-transactions-button";
+import { PublicDateFilter } from "@/components/public-date-filter";
 import { PublicShell } from "@/components/public-shell";
 import { PublicTransactionTabs } from "@/components/public-transaction-tabs";
 import { dateTime, money } from "@/lib/format";
@@ -9,8 +10,25 @@ import { prisma } from "@/lib/prisma";
 
 type Props = {
   params: Promise<{ slug: string; dharmaId: string }>;
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; from?: string; to?: string }>;
 };
+
+function validDate(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  )
+    return undefined;
+  return value;
+}
+
+function displayDate(value: string) {
+  return value.split("-").reverse().join("/");
+}
 
 const getPublicDharma = cache((slug: string, dharmaId: string) =>
   prisma.dharma.findFirst({
@@ -45,17 +63,46 @@ export default async function PublicDharmaPage({
     filters.type === "CREDIT" || filters.type === "DEBIT"
       ? filters.type
       : undefined;
+  let fromDate = validDate(filters.from);
+  let toDate = validDate(filters.to);
+  if (fromDate && !toDate) toDate = fromDate;
+  if (toDate && !fromDate) fromDate = toDate;
+  if (fromDate && toDate && fromDate > toDate)
+    [fromDate, toDate] = [toDate, fromDate];
+  const hasDateFilter = Boolean(fromDate && toDate);
+  const dateRangeWhere =
+    fromDate && toDate
+      ? {
+          transactionTime: {
+            gte: new Date(`${fromDate}T00:00:00+07:00`),
+            lt: new Date(
+              new Date(`${toDate}T00:00:00+07:00`).getTime() +
+                24 * 60 * 60 * 1000,
+            ),
+          },
+        }
+      : {};
+  const dateSummary =
+    fromDate && toDate
+      ? fromDate === toDate
+        ? `Ngày ${displayDate(fromDate)}`
+        : `Từ ${displayDate(fromDate)} đến ${displayDate(toDate)}`
+      : "Tất cả ngày";
   const [totals, transactions] = await Promise.all([
     prisma.transaction.groupBy({
       by: ["type"],
-      where: { dharmaId: dharma.id },
+      where: { dharmaId: dharma.id, ...dateRangeWhere },
       _sum: { amount: true },
       _count: true,
     }),
     prisma.transaction.findMany({
-      where: { dharmaId: dharma.id, ...(type ? { type } : {}) },
+      where: {
+        dharmaId: dharma.id,
+        ...(type ? { type } : {}),
+        ...dateRangeWhere,
+      },
       orderBy: { transactionTime: "desc" },
-      take: 50,
+      take: hasDateFilter ? undefined : 50,
       select: {
         id: true,
         refId: true,
@@ -69,7 +116,8 @@ export default async function PublicDharmaPage({
   ]);
   const income = totals.find((item) => item.type === "CREDIT");
   const expense = totals.find((item) => item.type === "DEBIT");
-  // Keep selecting the latest 50 records, then display them chronologically.
+  // Without a date filter, select the latest 50 records. Date-filtered views
+  // include every matching row so the Excel copy contains the full range.
   const chronologicalTransactions = [...transactions].reverse();
 
   return (
@@ -111,13 +159,18 @@ export default async function PublicDharmaPage({
             </p>
           </div>
         </div>
+        <p className="text-xs font-medium text-[#48617e] mt-3">
+          Phạm vi thống kê: {dateSummary}
+        </p>
       </section>
       <section className="card">
         <div className="p-5 border-b border-[#e3e9e5] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold text-lg">Giao dịch của thiện pháp</h2>
             <p className="text-sm text-[#7a867e] mt-1">
-              Các khoản đã được phân loại tự động hoặc thủ công.
+              {hasDateFilter
+                ? `${chronologicalTransactions.length.toLocaleString("vi-VN")} giao dịch trong phạm vi đã chọn.`
+                : "Hiển thị 50 giao dịch gần nhất."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -129,9 +182,19 @@ export default async function PublicDharmaPage({
                 amount: Number(item.amount),
               }))}
             />
-            <PublicTransactionTabs activeType={type} />
+            <PublicTransactionTabs
+              activeType={type}
+              fromDate={fromDate}
+              toDate={toDate}
+            />
           </div>
         </div>
+        <PublicDateFilter
+          key={`${fromDate || "all"}-${toDate || "all"}`}
+          activeType={type}
+          fromDate={fromDate}
+          toDate={toDate}
+        />
         <div className="divide-y divide-[#edf1ee] sm:hidden">
           {chronologicalTransactions.map((item) => (
             <article key={item.id} className="p-4">
