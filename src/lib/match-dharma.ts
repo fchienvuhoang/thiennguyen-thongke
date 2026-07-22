@@ -1,4 +1,7 @@
-import { normalizeClassificationText } from "@/lib/format";
+import {
+  normalizeClassificationText,
+  normalizeText,
+} from "@/lib/format";
 
 export type ClassifiableDharma = {
   id: string;
@@ -11,6 +14,26 @@ type KeywordMatch<T extends ClassifiableDharma> = {
   keyword: string;
   normalizedKeyword: string;
 };
+
+function keywordMatches(normalizedNarrative: string, keyword: string) {
+  const normalizedKeyword = normalizeClassificationText(keyword);
+  if (!normalizedKeyword) return false;
+
+  // Ưu tiên cách khớp nguyên cụm như trước đây.
+  if (normalizedNarrative.includes(normalizedKeyword)) return true;
+
+  // Với mã gồm nhiều thành phần, chấp nhận các thành phần xuất hiện ở bất kỳ
+  // vị trí/thứ tự nào. Narrative đã bỏ dấu và ký tự phân cách nên vẫn khớp
+  // khi người chuyển khoản viết hoa/thường, chèn dấu chấm/gạch, hoặc viết liền.
+  const parts = normalizeText(keyword)
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean);
+  return (
+    parts.length > 1 &&
+    parts.every((part) => normalizedNarrative.includes(part))
+  );
+}
 
 /**
  * Tìm các thiện pháp khớp nội dung giao dịch.
@@ -30,10 +53,7 @@ export function matchDharmas<T extends ClassifiableDharma>(
   for (const dharma of dharmas) {
     for (const keyword of [dharma.code, ...dharma.aliases]) {
       const normalizedKeyword = normalizeClassificationText(keyword);
-      if (
-        !normalizedKeyword ||
-        !normalizedNarrative.includes(normalizedKeyword)
-      ) {
+      if (!normalizedKeyword || !keywordMatches(normalizedNarrative, keyword)) {
         continue;
       }
 
