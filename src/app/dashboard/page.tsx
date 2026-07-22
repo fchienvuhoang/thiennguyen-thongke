@@ -43,7 +43,7 @@ export default async function DashboardPage({
     prisma.bankAccount.findMany({
       where: { organizationId },
       include: { _count: { select: { transactions: true, dharmas: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.dharma.findMany({
       where: { organizationId },
@@ -51,7 +51,7 @@ export default async function DashboardPage({
         bankAccount: true,
         _count: { select: { transactions: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.membership.findMany({
       where: { organizationId },
