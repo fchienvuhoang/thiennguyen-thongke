@@ -58,6 +58,7 @@ export function OrganizationManagementModals({
   canManageMembers,
 }: Props) {
   const [dharmaOpen, setDharmaOpen] = useState(false);
+  const [activeAccountId, setActiveAccountId] = useState("");
   const [membersOpen, setMembersOpen] = useState(false);
   const [dharmaProgress, setDharmaProgress] = useState<
     "idle" | "creating" | "reclassifying" | "refreshing"
@@ -122,7 +123,10 @@ export function OrganizationManagementModals({
 
       setDharmaProgress("refreshing");
       window.setTimeout(() => {
-        window.history.replaceState(null, "", "/dashboard#thien-phap");
+        const url = new URL(window.location.href);
+        url.pathname = "/dashboard";
+        url.hash = "thien-phap";
+        window.history.replaceState(null, "", url);
         window.location.reload();
       }, 100);
     } catch (error) {
@@ -138,6 +142,14 @@ export function OrganizationManagementModals({
   }
 
   function openDharmaModal() {
+    const requestedAccountId = new URL(window.location.href).searchParams.get(
+      "account",
+    );
+    setActiveAccountId(
+      accounts.some((account) => account.id === requestedAccountId)
+        ? requestedAccountId || ""
+        : accounts[0]?.id || "",
+    );
     setDharmaError("");
     setDharmaProgress("idle");
     setDharmaOpen(true);
@@ -153,7 +165,7 @@ export function OrganizationManagementModals({
 
       <Modal title="Thêm thiện pháp" open={dharmaOpen} disableClose={dharmaBusy} onClose={() => setDharmaOpen(false)}>
         <form onSubmit={handleCreateDharma} className="grid sm:grid-cols-2 gap-3 p-5">
-          <select className="input" name="bankAccountId" required disabled={dharmaBusy}>
+          <select className="input" name="bankAccountId" required disabled={dharmaBusy} defaultValue={activeAccountId}>
             <option value="">Chọn tài khoản</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>{account.name} — {account.accountNo}</option>

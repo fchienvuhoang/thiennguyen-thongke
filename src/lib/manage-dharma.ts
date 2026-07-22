@@ -50,12 +50,14 @@ function prepareDharmaInput(input: {
 
 async function assertKeywordsAvailable(
   organizationId: string,
+  bankAccountId: string,
   keywords: Map<string, { value: string; type: string }>,
   excludeDharmaId?: string,
 ) {
   const dharmas = await prisma.dharma.findMany({
     where: {
       organizationId,
+      bankAccountId,
       ...(excludeDharmaId ? { id: { not: excludeDharmaId } } : {}),
     },
     select: { name: true, code: true, aliases: true },
@@ -94,7 +96,11 @@ export async function createDharma(
       select: { id: true },
     }),
     availableDharmaSlug(session.organizationId, prepared.name),
-    assertKeywordsAvailable(session.organizationId, prepared.keywords),
+    assertKeywordsAvailable(
+      session.organizationId,
+      input.bankAccountId,
+      prepared.keywords,
+    ),
   ]);
   if (!account) throw new Error("Không tìm thấy tài khoản");
   return prisma.dharma.create({
@@ -117,18 +123,17 @@ export async function updateDharma(
   if (session.systemRole === "SUPER_ADMIN")
     throw new Error("Quản trị hệ thống không quản lý thiện pháp");
   const prepared = prepareDharmaInput(input);
-  const [existing] = await Promise.all([
-    prisma.dharma.findFirst({
-      where: { id: input.id, organizationId: session.organizationId },
-      select: { id: true, bankAccountId: true },
-    }),
-    assertKeywordsAvailable(
-      session.organizationId,
-      prepared.keywords,
-      input.id,
-    ),
-  ]);
+  const existing = await prisma.dharma.findFirst({
+    where: { id: input.id, organizationId: session.organizationId },
+    select: { id: true, bankAccountId: true },
+  });
   if (!existing) throw new Error("Không tìm thấy thiện pháp");
+  await assertKeywordsAvailable(
+    session.organizationId,
+    existing.bankAccountId,
+    prepared.keywords,
+    input.id,
+  );
 
   return prisma.dharma.update({
     where: { id: existing.id },

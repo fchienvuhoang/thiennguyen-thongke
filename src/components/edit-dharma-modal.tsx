@@ -69,7 +69,10 @@ export function EditDharmaModal({
 
       setProgress("refreshing");
       window.setTimeout(() => {
-        window.history.replaceState(null, "", "/dashboard#thien-phap");
+        const url = new URL(window.location.href);
+        url.pathname = "/dashboard";
+        url.hash = "thien-phap";
+        window.history.replaceState(null, "", url);
         window.location.reload();
       }, 100);
     } catch (submitError) {
