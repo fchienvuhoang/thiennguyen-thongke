@@ -1,26 +1,17 @@
 import { redirect } from "next/navigation";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Pencil,
-  ReceiptText,
-  TriangleAlert,
-  UserPlus,
-} from "lucide-react";
+import { Pencil, UserPlus } from "lucide-react";
 import {
   createCustomerUserAction,
   createDharmaAction,
   updateDharmaAction,
 } from "@/app/actions";
 import { DeleteDharmaForm } from "@/components/delete-dharma-form";
-import { DharmaTotalsPanel } from "@/components/dharma-totals-panel";
+import { DashboardDataPanels } from "@/components/dashboard-data-panels";
 import { OrganizationManagementModals } from "@/components/organization-management-modals";
 import { PageHeader } from "@/components/page-header";
 import { PublicLink } from "@/components/public-link";
 import { SubmitButton } from "@/components/submit-button";
-import { TransactionsPanel } from "@/components/transactions-panel";
 import { requireSession } from "@/lib/auth";
-import { money } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 type Filters = {
@@ -74,19 +65,6 @@ export default async function DashboardPage({
       _count: true,
     }),
   ]);
-  const transactionCount = transactionStats.reduce(
-    (sum, row) => sum + row._count,
-    0,
-  );
-  const incomeTotal = transactionStats
-    .filter((row) => row.type === "CREDIT")
-    .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0);
-  const expenseTotal = transactionStats
-    .filter((row) => row.type === "DEBIT")
-    .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0);
-  const unmatched = transactionStats
-    .filter((row) => row.dharmaId === null)
-    .reduce((sum, row) => sum + row._count, 0);
   const requestedDharma = dharmas.find(
     (dharma) => dharma.id === filters.tab,
   );
@@ -95,18 +73,6 @@ export default async function DashboardPage({
   )
     ? filters.account || ""
     : requestedDharma?.bankAccountId || accounts[0]?.id || "";
-  const initialAccountStats = initialAccountId
-    ? transactionStats.filter(
-        (row) => row.bankAccountId === initialAccountId,
-      )
-    : transactionStats;
-  const initialAccountCount = initialAccountStats.reduce(
-    (sum, row) => sum + row._count,
-    0,
-  );
-  const initialAccountUnmatched = initialAccountStats
-    .filter((row) => row.dharmaId === null)
-    .reduce((sum, row) => sum + row._count, 0);
   const incomeMap = new Map(
     transactionStats.filter((row) => row.type === "CREDIT" && row.dharmaId).map((row) => [
       row.dharmaId,
@@ -116,33 +82,6 @@ export default async function DashboardPage({
   const originalStatementUrl = accounts.find(
     (account) => account.statementUrl,
   )?.statementUrl;
-  const cards = [
-    [
-      "Tổng thu",
-      money.format(incomeTotal),
-      ArrowDownLeft,
-      "bg-[#e7f3ed] text-[#176b46]",
-    ],
-    [
-      "Tổng chi",
-      money.format(expenseTotal),
-      ArrowUpRight,
-      "bg-[#fff0e9] text-[#ad5b36]",
-    ],
-    [
-      "Số dư thu − chi",
-      money.format(incomeTotal - expenseTotal),
-      ReceiptText,
-      "bg-[#edf1f7] text-[#48617e]",
-    ],
-    [
-      "Chưa phân loại",
-      unmatched.toLocaleString("vi-VN"),
-      TriangleAlert,
-      "bg-[#fff1d7] text-[#9a6412]",
-    ],
-  ] as const;
-
   return (
     <>
       <PageHeader
@@ -186,25 +125,27 @@ export default async function DashboardPage({
         )}
       </section>
 
-      <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-        {cards.map(([label, value, Icon, color]) => (
-          <div className="card px-4 py-3 flex items-center gap-3" key={label}>
-            <div
-              className={`size-9 shrink-0 rounded-xl grid place-items-center ${color}`}
-            >
-              <Icon size={18} />
-            </div>
-            <div><p className="text-[#718078] text-xs">{label}</p><p className="text-lg font-semibold leading-tight mt-0.5">{value}</p></div>
-          </div>
-        ))}
-      </section>
-
-      <DharmaTotalsPanel
-        accounts={accounts.map((account) => ({
-          id: account.id,
-          name: account.name,
-          accountNo: account.accountNo,
-        }))}
+      <DashboardDataPanels
+        accounts={accounts.map((account) => {
+          const stats = transactionStats.filter(
+            (row) => row.bankAccountId === account.id,
+          );
+          return {
+            id: account.id,
+            name: account.name,
+            accountNo: account.accountNo,
+            income: stats
+              .filter((row) => row.type === "CREDIT")
+              .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0),
+            expense: stats
+              .filter((row) => row.type === "DEBIT")
+              .reduce((sum, row) => sum + Number(row._sum.amount || 0), 0),
+            transactionCount: stats.reduce((sum, row) => sum + row._count, 0),
+            unmatched: stats
+              .filter((row) => row.dharmaId === null)
+              .reduce((sum, row) => sum + row._count, 0),
+          };
+        })}
         dharmas={dharmas.map((dharma) => {
           const stats = incomeMap.get(dharma.id);
           return {
@@ -216,10 +157,25 @@ export default async function DashboardPage({
             publicSlug: dharma.publicSlug,
             incomeCount: stats?.count || 0,
             incomeAmount: stats?.amount || 0,
+            transactionCount: dharma._count.transactions,
           };
         })}
         organizationSlug={organization.slug}
         initialAccountId={initialAccountId}
+        initialFilters={{
+          tab:
+            filters.tab ||
+            (filters.status === "UNMATCHED" ? "unmatched" : "all"),
+          type:
+            filters.type === "CREDIT" || filters.type === "DEBIT"
+              ? filters.type
+              : "ALL",
+          account: initialAccountId,
+          page: Math.max(
+            1,
+            Number.parseInt(filters.page || "1", 10) || 1,
+          ),
+        }}
       />
 
       <details id="cau-hinh" className="card scroll-mt-24 mb-5">
@@ -441,41 +397,6 @@ export default async function DashboardPage({
         </div>
       </details>
 
-      <TransactionsPanel
-        accounts={accounts.map((account) => ({
-          id: account.id,
-          accountNo: account.accountNo,
-          name: account.name,
-        }))}
-        dharmas={dharmas.map((dharma) => ({
-          id: dharma.id,
-          name: dharma.name,
-          bankAccountId: dharma.bankAccountId,
-          transactionCount: dharma._count.transactions,
-        }))}
-        initialFilters={{
-          tab:
-            filters.tab ||
-            (filters.status === "UNMATCHED" ? "unmatched" : "all"),
-          type:
-            filters.type === "CREDIT" || filters.type === "DEBIT"
-              ? filters.type
-              : "ALL",
-          account: initialAccountId,
-          page: Math.max(
-            1,
-            Number.parseInt(filters.page || "1", 10) || 1,
-          ),
-        }}
-        initialCounts={{
-          all: initialAccountCount,
-          unmatched: initialAccountUnmatched,
-        }}
-      />
-      <p className="text-center text-xs text-[#8a948e] mt-6">
-        {transactionCount.toLocaleString("vi-VN")} giao dịch đã lưu trong hệ
-        thống
-      </p>
     </>
   );
 }

@@ -162,10 +162,6 @@ export function TransactionsPanel({
     changeFilters({ type, page: 1 });
   }
 
-  function selectAccount(accountId: string) {
-    changeFilters({ account: accountId, tab: "all", page: 1 });
-  }
-
   async function handleClassification(
     event: FormEvent<HTMLFormElement>,
     transactionId: string,
@@ -304,49 +300,6 @@ export function TransactionsPanel({
             </button>
           </form>
         </div>
-        {accounts.length > 0 && (
-          <div className="mt-5 rounded-xl border border-[#dfe7e2] bg-[#f7faf8] p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#68756d]">
-              Tài khoản nguồn đang xem
-            </p>
-            {accounts.length > 1 ? (
-              <div
-                className="flex gap-2 overflow-x-auto mt-2 pb-0.5"
-                role="tablist"
-                aria-label="Tài khoản nguồn"
-              >
-                {accounts.map((account) => (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filters.account === account.id}
-                    disabled={loading}
-                    key={account.id}
-                    onClick={() => selectAccount(account.id)}
-                    className={`btn py-2.5 whitespace-nowrap border ${
-                      filters.account === account.id
-                        ? "btn-primary border-[#176b46]"
-                        : "bg-white text-[#33483c] border-[#d8e0da]"
-                    }`}
-                  >
-                    {loading && filters.account === account.id && (
-                      <LoaderCircle size={15} className="animate-spin" />
-                    )}
-                    <span>{account.name}</span>
-                    <span className="text-xs opacity-75">TK {account.accountNo}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 font-medium text-[#244b37]">
-                {selectedAccount?.name}{" "}
-                <span className="text-sm font-normal text-[#68756d]">
-                  · TK {selectedAccount?.accountNo}
-                </span>
-              </p>
-            )}
-          </div>
-        )}
         <nav className="flex gap-2 overflow-x-auto mt-5 pb-1" aria-label="Phân loại giao dịch">
           <button
             type="button"

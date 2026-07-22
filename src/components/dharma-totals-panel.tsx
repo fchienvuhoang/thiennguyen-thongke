@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { EditDharmaModal } from "@/components/edit-dharma-modal";
 import { PublicLink } from "@/components/public-link";
 import { money } from "@/lib/format";
@@ -26,18 +25,13 @@ export function DharmaTotalsPanel({
   accounts,
   dharmas,
   organizationSlug,
-  initialAccountId,
+  selectedAccountId,
 }: {
   accounts: Account[];
   dharmas: Dharma[];
   organizationSlug: string;
-  initialAccountId?: string;
+  selectedAccountId: string;
 }) {
-  const [selectedAccountId, setSelectedAccountId] = useState(
-    accounts.some((account) => account.id === initialAccountId)
-      ? initialAccountId || ""
-      : accounts[0]?.id || "",
-  );
   const selectedAccount = accounts.find(
     (account) => account.id === selectedAccountId,
   );
@@ -59,31 +53,6 @@ export function DharmaTotalsPanel({
         <p className="text-sm text-[#7a867e] mt-1">
           Tổng hợp từ các giao dịch CREDIT đã được phân loại.
         </p>
-        {accounts.length > 0 && (
-          <div
-            className="flex gap-2 overflow-x-auto mt-4 pb-1"
-            role="tablist"
-            aria-label="Tổng thu theo tài khoản nguồn"
-          >
-            {accounts.map((account) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selectedAccountId === account.id}
-                key={account.id}
-                onClick={() => setSelectedAccountId(account.id)}
-                className={`btn py-2.5 whitespace-nowrap border ${
-                  selectedAccountId === account.id
-                    ? "btn-primary border-[#176b46]"
-                    : "bg-white text-[#33483c] border-[#d8e0da]"
-                }`}
-              >
-                <span>{account.name}</span>
-                <span className="text-xs opacity-75">TK {account.accountNo}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {selectedAccount ? (
