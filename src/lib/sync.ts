@@ -10,6 +10,7 @@ import {
   normalizeText,
   parseMbDateTime,
 } from "@/lib/format";
+import { matchDharmas } from "@/lib/match-dharma";
 
 type ApiItem = {
   id: string;
@@ -155,13 +156,9 @@ export async function syncAccount(
           const normalizedForClassification = normalizeClassificationText(
             item.narrative || "",
           );
-          const matches = account.dharmas.filter((dharma) =>
-            [dharma.code, ...dharma.aliases].some((code) => {
-              const candidate = normalizeClassificationText(code);
-              return (
-                candidate && normalizedForClassification.includes(candidate)
-              );
-            }),
+          const matches = matchDharmas(
+            normalizedForClassification,
+            account.dharmas,
           );
           const status =
             matches.length === 1
@@ -169,7 +166,8 @@ export async function syncAccount(
               : matches.length > 1
                 ? ClassificationStatus.AMBIGUOUS
                 : ClassificationStatus.UNMATCHED;
-          const autoDharma = matches.length === 1 ? matches[0] : null;
+          const autoMatch = matches.length === 1 ? matches[0] : null;
+          const autoDharma = autoMatch?.dharma || null;
           return {
             item,
             existed,
@@ -177,6 +175,7 @@ export async function syncAccount(
             normalized,
             status,
             autoDharma,
+            matchedCode: autoMatch?.keyword || null,
           };
         });
         const savedTransactions: Array<{ id: string }> = [];
@@ -192,7 +191,15 @@ export async function syncAccount(
           );
           const savedBatch = await prisma.$transaction(
             batch.map(
-              ({ item, existed, rawData, normalized, status, autoDharma }) =>
+              ({
+                item,
+                existed,
+                rawData,
+                normalized,
+                status,
+                autoDharma,
+                matchedCode,
+              }) =>
                 prisma.transaction.upsert({
                   where: {
                     bankAccountId_externalId: {
@@ -216,7 +223,7 @@ export async function syncAccount(
                     displayName: item.displayName,
                     classificationStatus: status,
                     dharmaId: autoDharma?.id || null,
-                    matchedCode: autoDharma?.code || null,
+                    matchedCode,
                     classifiedAt: new Date(),
                     rawData,
                   },
@@ -230,7 +237,7 @@ export async function syncAccount(
                       ? {
                           classificationStatus: status,
                           dharmaId: autoDharma?.id || null,
-                          matchedCode: autoDharma?.code || null,
+                          matchedCode,
                           classifiedByEmail: null,
                           classifiedAt: new Date(),
                         }
@@ -389,27 +396,22 @@ export async function reclassifyAccount(bankAccountId: string) {
 
   for (const transaction of transactions) {
     const normalized = normalizeClassificationText(transaction.narrative);
-    const matches = account.dharmas.filter((dharma) =>
-      [dharma.code, ...dharma.aliases].some((code) => {
-        const candidate = normalizeClassificationText(code);
-        return candidate && normalized.includes(candidate);
-      }),
-    );
+    const matches = matchDharmas(normalized, account.dharmas);
     const classificationStatus =
       matches.length === 1
         ? ClassificationStatus.MATCHED
         : matches.length > 1
           ? ClassificationStatus.AMBIGUOUS
           : ClassificationStatus.UNMATCHED;
-    const dharmaId = matches.length === 1 ? matches[0].id : null;
-    const matchedCode = matches.length === 1 ? matches[0].code : null;
+    const dharmaId = matches.length === 1 ? matches[0].dharma.id : null;
+    const matchedCode = matches.length === 1 ? matches[0].keyword : null;
     const changed =
       (transaction.dharmaId || null) !== dharmaId ||
       (transaction.matchedCode || null) !== matchedCode ||
       transaction.classificationStatus !== classificationStatus;
     if (!changed) continue;
 
-    const key = `${classificationStatus}:${dharmaId || ""}`;
+    const key = `${classificationStatus}:${dharmaId || ""}:${matchedCode || ""}`;
     const group = groups.get(key) || {
       ids: [],
       dharmaId,
@@ -426,7 +428,7 @@ export async function reclassifyAccount(bankAccountId: string) {
         previousDharmaId: transaction.dharmaId,
         previousDharmaName: transaction.dharma?.name,
         newDharmaId: dharmaId,
-        newDharmaName: matches.length === 1 ? matches[0].name : null,
+        newDharmaName: matches.length === 1 ? matches[0].dharma.name : null,
       });
     }
   }
